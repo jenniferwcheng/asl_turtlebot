@@ -72,7 +72,7 @@ class PoseControllerNode:
         ########## Code starts here ##########
         # TODO: Create a subscriber to the '/cmd_pose' topic that receives
         #       Pose2D messages and calls cmd_pose_callback.
-        rospy.Subscriber("/cmd_pose", Pose2D, cmd_pose_callback)
+        rospy.Subscriber("/cmd_pose", Pose2D, self.cmd_pose_callback)
         ########## Code ends here ##########
 
 
@@ -121,7 +121,7 @@ class PoseControllerNode:
         ######### YOUR CODE HERE ############
         # TODO: Use your pose controller to compute controls (V, om) given the
         #       robot's current state.
-        V, om = self.controller.compute_control(msg.x, msg.y, msg.theta,rospy.get_rostime())
+        V, om = self.controller.compute_control(self.x, self.y, self.theta,rospy.get_rostime())
         ######### END OF YOUR CODE ##########
 
         cmd = Twist()

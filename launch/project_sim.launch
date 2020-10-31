@@ -75,5 +75,10 @@
   <node pkg="asl_turtlebot" type="goal_commander.py" name="goal_commander" />
   <node pkg="asl_turtlebot" type="detector.py" name="turtlebot_detector" />
 
-  <node name="rviz" pkg="rviz" type="rviz" args="-d $(find asl_turtlebot)/rviz/project_sim.rviz"/>
+  <!--<node name="rviz" pkg="rviz" type="rviz" args="-d $(find asl_turtlebot)/rviz/project_sim.rviz"/>-->
+  
+   <node pkg="asl_turtlebot" name="nav" type="navigator.py"/>
+   <node type="rviz" name="rviz" pkg="rviz" args="-d $(find section5)/rviz/my_nav.rviz" />
+   <node pkg="section5" type="marker_pub.py" name="marker_node"/>
+       
 </launch>

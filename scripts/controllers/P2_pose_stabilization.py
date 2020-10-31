@@ -1,12 +1,15 @@
 #!/usr/bin/env python
+
+import rospy
 import numpy as np
 from utils import wrapToPi
-
+from std_msgs.msg import Float64
 # command zero velocities once we are this close to the goal
 RHO_THRES = 0.05
 ALPHA_THRES = 0.1
 DELTA_THRES = 0.1
 
+  
 class PoseController:
     """ Pose stabilization controller """
     def __init__(self, k1, k2, k3, V_max=0.5, om_max=1):
@@ -16,6 +19,11 @@ class PoseController:
 
         self.V_max = V_max
         self.om_max = om_max
+        
+        self.alpha_pub = rospy.Publisher('/controller/alpha', Float64, queue_size=10)
+        self.rho_pub = rospy.Publisher('/controller/rho', Float64, queue_size=10)
+        self.delta_pub = rospy.Publisher('/controller/delta', Float64, queue_size=10)
+        #rospy.init_node('riyaz_is_cute', anonymous=True)
 
     def load_goal(self, x_g, y_g, th_g):
         """ Loads in a new goal position """
@@ -34,20 +42,28 @@ class PoseController:
         Hints: You'll need to use the wrapToPi function. The np.sinc function
         may also be useful, look up its documentation
         """
-        ########## Code starts here #########
-        # Obtain distance from vehicle to goal and relevant angles
-        rho = np.sqrt((self.y_g-y)**2 + (self.x_g-x)**2)
-        alpha = wrapToPi(np.arctan2(y-self.y_g,x-self.x_g) - th + np.pi)
-        delta = wrapToPi(alpha + th - self.th_g)
-        
+        ########## Code starts here ##########
+        #calculate change of variables from cartesion
+        rho = np.sqrt((x-self.x_g)**2+(y-self.y_g)**2) #rho
+        alpha = wrapToPi(np.arctan2(y-self.y_g,x-self.x_g) - th + np.pi) #alpha
+        delta = wrapToPi(alpha + th - self.th_g) #delta
+        """
+        NOTE: to get the final pose, we can "rotate" the space by the goal heading by simply
+              subtracting off theta goal in the delta calculation
+        """
+        #calulate control values
         V = self.k1*rho*np.cos(alpha)
-        om = self.k2*alpha + self.k1*np.sinc(alpha/np.pi)*np.cos(alpha)*(alpha+self.k3*delta)
-        
+        om = self.k2*alpha + self.k1*(np.sinc(alpha/np.pi)*np.cos(alpha))*(alpha+self.k3*delta)
         ########## Code ends here ##########
 
         # apply control limits
         V = np.clip(V, -self.V_max, self.V_max)
         om = np.clip(om, -self.om_max, self.om_max)
-
+        
+        ##### PUBLISHING ####
+        self.alpha_pub.publish(alpha)
+        self.rho_pub.publish(rho)
+        self.delta_pub.publish(delta)
+        
+        
         return V, om
-

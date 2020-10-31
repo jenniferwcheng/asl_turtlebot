@@ -259,6 +259,43 @@ class Supervisor:
 
         elif self.mode == Mode.STOP:
             # At a stop sign
+            #self.nav_to_pose()
+            
+            if self.has_stopped():
+                # start crossing
+                self.init_crossing()
+            else:
+                self.stay_idle()
+                                
+        elif self.mode == Mode.CROSS:
+            #check if we finished crossing
+            if (self.has_crossed()):
+                # Crossing an intersection
+                self.nav_to_pose()
+                self.mode = Mode.SPOSE
+
+        elif self.mode == Mode.NAV:
+            if self.close_to(self.x_g, self.y_g, self.theta_g):
+                self.mode = Mode.IDLE
+            else:
+                self.nav_to_pose()
+
+        else:
+            raise Exception("This mode is not supported: {}".format(str(self.mode)))
+            """
+        if self.mode == Mode.IDLE:
+            # Send zero velocity
+            self.stay_idle()
+
+        elif self.mode == Mode.POSE:
+            # Moving towards a desired pose
+            if self.close_to(self.x_g, self.y_g, self.theta_g):
+                self.mode = Mode.IDLE
+            else:
+                self.go_to_pose()
+
+        elif self.mode == Mode.STOP:
+            # At a stop sign
             self.nav_to_pose()
 
         elif self.mode == Mode.CROSS:
@@ -273,7 +310,7 @@ class Supervisor:
 
         else:
             raise Exception("This mode is not supported: {}".format(str(self.mode)))
-
+            """
         ############ Code ends here ############
 
     def run(self):

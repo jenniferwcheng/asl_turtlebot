@@ -65,8 +65,8 @@ class Navigator:
         self.plan_start = [0.,0.]
         
         # Robot limits
-        self.v_max = 0.2    # maximum velocity
-        self.om_max = 0.4   # maximum angular velocity
+        self.v_max = rospy.get_param("~v_max", 0.2)  #0.2  # maximum velocity
+        self.om_max =rospy.get_param("~om_max", 0.4)  #0.4   # maximum angular velocity
 
         self.v_des = 0.12   # desired cruising velocity
         self.theta_start_thresh = 0.05   # threshold in theta to start moving forward when path-following
@@ -78,7 +78,7 @@ class Navigator:
         self.at_thresh_theta = 0.05
 
         # trajectory smoothing
-        self.spline_alpha = 0.15
+        self.spline_alpha = 0.01
         self.traj_dt = 0.1
 
         # trajectory tracking controller parameters
@@ -110,10 +110,18 @@ class Navigator:
         print "finished init"
         
     def dyn_cfg_callback(self, config, level):
-        rospy.loginfo("Reconfigure Request: k1:{k1}, k2:{k2}, k3:{k3}".format(**config))
+        rospy.loginfo("Reconfigure Request: k1:{k1}, k2:{k2}, k3:{k3}, spline_alpha:{spline_alpha}".format(**config))
         self.pose_controller.k1 = config["k1"]
         self.pose_controller.k2 = config["k2"]
         self.pose_controller.k3 = config["k3"]
+        self.spline_alpha = config["spline_alpha"]
+        
+        self.traj_controller.kpx = config["kpx"]
+        self.traj_controller.kpy = config["kpy"]
+        self.traj_controller.kdx = config["kdx"]
+        self.traj_controller.kdy = config["kdy"]
+        self.traj_controller.V_max = config["V_max"]
+        self.traj_controller.om_max = config["om_max"]
         return config
 
     def cmd_nav_callback(self, data):
@@ -152,7 +160,6 @@ class Navigator:
             if self.x_g is not None:
                 # if we have a goal to plan to, replan
                 rospy.loginfo("replanning because of new map")
-                self.replan() # new map, need to replan
 
     def shutdown_callback(self):
         """
@@ -273,6 +280,7 @@ class Navigator:
 
         rospy.loginfo("Navigator: computing navigation plan")
         success =  problem.solve()
+        print("Ran Solve")
         if not success:
             rospy.loginfo("Planning failed")
             return

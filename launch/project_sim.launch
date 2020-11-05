@@ -72,13 +72,20 @@
     <param name="lasamplestep" value="0.005"/>
   </node>
 
+  <!--<node name="rviz" pkg="rviz" type="rviz" args="-d $(find asl_turtlebot)/rviz/project_sim.rviz"/>-->
   <node pkg="asl_turtlebot" type="goal_commander.py" name="goal_commander" />
   <node pkg="asl_turtlebot" type="detector.py" name="turtlebot_detector" />
-
-  <!--<node name="rviz" pkg="rviz" type="rviz" args="-d $(find asl_turtlebot)/rviz/project_sim.rviz"/>-->
   
-   <node pkg="asl_turtlebot" name="nav" type="navigator.py"/>
-   <node type="rviz" name="rviz" pkg="rviz" args="-d $(find section5)/rviz/my_nav.rviz" />
-   <node pkg="section5" type="marker_pub.py" name="marker_node"/>
-       
+  <!-- NAVIGATING MANUALLY -->
+  <node pkg="asl_turtlebot" name="nav" type="navigator.py" output="screen"/>
+  <node type="rviz" name="rviz" pkg="rviz" args="-d $(find section5)/rviz/my_nav.rviz" />
+  <node pkg="section5" type="marker_pub.py" name="marker_node"/>
+  <!--<node pkg="asl_turtlebot" name="pose_controller" type="pose_controller.py"/>-->
+   
+  <!-- STOP SIGN STUFF?? -->
+  <node pkg="asl_turtlebot" name="detector" type="detector.py"/>
+  <!--<node pkg="asl_turtlebot" type="gazebo_plot.py" name="gazebo_plot" />-->
+  <!--<node pkg="asl_turtlebot" name="supervisor" type="supervisor.py"/>-->
+    
+  <!--<node pkg="asl_turtlebot" name="puddle_viz" type="puddle_viz.py"/>-->
 </launch>

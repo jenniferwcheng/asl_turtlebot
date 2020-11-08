@@ -8,6 +8,8 @@ from asl_turtlebot.msg import DetectedObject
 import tf
 import math
 from enum import Enum
+from utils import wrapToPi 
+import numpy as np
 
 # if sim is True/using gazebo, therefore want to subscribe to /gazebo/model_states\
 # otherwise, they will use a TF lookup (hw2+)
@@ -16,6 +18,9 @@ use_gazebo = rospy.get_param("sim")
 # if using gmapping, you will have a map frame. otherwise it will be odom frame
 mapping = rospy.get_param("map")
 
+# ---------------------------------------------
+#                Constants
+# ---------------------------------------------
 
 # threshold at which we consider the robot at a location
 POS_EPS = .1
@@ -30,6 +35,9 @@ STOP_MIN_DIST = .5
 # time taken to cross an intersection
 CROSSING_TIME = 3
 
+# the number of food items
+FOOD_ITEMS = 2
+
 # state machine modes, not all implemented
 class Mode(Enum):
     IDLE = 1
@@ -39,6 +47,11 @@ class Mode(Enum):
     NAV = 5
     MANUAL = 6
 
+
+# food indices
+BANANA = 0
+APPLE = 1
+ 
 
 print "supervisor settings:\n"
 print "use_gazebo = %s\n" % use_gazebo
@@ -55,6 +68,14 @@ class Supervisor:
         self.mode = Mode.IDLE
         self.last_mode_printed = None
         self.trans_listener = tf.TransformListener()
+        #list of the food and it's location
+        self.food_data = np.zeros((FOOD_ITEMS, 5))
+        self.food_found = [0, 0]
+        
+        # ------------------------
+        #       publishers
+        # ------------------------
+        
         # command pose for controller
         self.pose_goal_publisher = rospy.Publisher('/cmd_pose', Pose2D, queue_size=10)
         # nav pose for controller
@@ -62,9 +83,20 @@ class Supervisor:
         # command vel (used for idling)
         self.cmd_vel_publisher = rospy.Publisher('/cmd_vel', Twist, queue_size=10)
 
-        # subscribers
+        # ------------------------
+        #       subscribers
+        # ------------------------
+        
         # stop sign detector
         rospy.Subscriber('/detector/stop_sign', DetectedObject, self.stop_sign_detected_callback)
+        #banana detector
+        rospy.Subscriber('/detector/kite', DetectedObject, self.banana_detected_callback) # this is technically banana not kite
+        '''
+        #[Object]
+        rospy.Subscriber('/detector/[object]', DetectedObject, self.[object]_detected_callback)
+        #[Object]
+        rospy.Subscriber('/detector/[object]', DetectedObject, self.[object]_detected_callback)
+        '''
         # high-level navigation pose
         rospy.Subscriber('/nav_pose', Pose2D, self.nav_pose_callback)
         # if using gazebo, we have access to perfect state
@@ -73,6 +105,10 @@ class Supervisor:
         # we can subscribe to nav goal click
         rospy.Subscriber('/move_base_simple/goal', PoseStamped, self.rviz_goal_callback)
         
+    # ---------------------------------------------
+    #       General Subscriber Callbacks
+    # ---------------------------------------------
+           
     def gazebo_callback(self, msg):
         pose = msg.pose[msg.name.index("turtlebot3_burger")]
         twist = msg.twist[msg.name.index("turtlebot3_burger")]
@@ -85,7 +121,7 @@ class Supervisor:
                     pose.orientation.w)
         euler = tf.transformations.euler_from_quaternion(quaternion)
         self.theta = euler[2]
-
+    
     def rviz_goal_callback(self, msg):
         """ callback for a pose goal sent through rviz """
         origin_frame = "/map" if mapping else "/odom"
@@ -111,7 +147,11 @@ class Supervisor:
         self.y_g = msg.y
         self.theta_g = msg.theta
         self.mode = Mode.NAV
-
+    
+    # ---------------------------------------------
+    #         Food Detection Callbacks
+    # ---------------------------------------------
+    
     def stop_sign_detected_callback(self, msg):
         """ callback for when the detector has found a stop sign. Note that
         a distance of 0 can mean that the lidar did not pickup the stop sign at all """
@@ -122,6 +162,46 @@ class Supervisor:
         # if close enough and in nav mode, stop
         if dist > 0 and dist < STOP_MIN_DIST and self.mode == Mode.NAV:
             self.init_stop_sign()
+            
+    def banana_detected_callback(self, msg):
+    
+        rospy.loginfo("Found ba-ba-ba ba-ba-nana")
+        if self.add_food_to_list(msg,BANANA):
+            rospy.loginfo("Succesfully added banana")
+        else:
+            rospy.loginfo("Did not add banana")
+            
+    # ---------------------------------------------
+    #             Helper Functions
+    # ---------------------------------------------
+        
+    def add_food_to_list(self, msg, label):
+        '''
+        Description:Add the food item to the data matrix
+        Arguments:msg from the topic, food item label
+        Returns:False if nothing was added, true if added
+        '''
+        #check to see if the food was added
+        if self.food_found[label] is 0:
+            #get the angle of the frame wrt the world        
+            theta_food = 0.5*wrapToPi(msg.thetaleft-msg.thetaright) + self.theta
+            
+            #find the x, y, of the food using the angle
+            x_food = self.x +msg.distance*np.cos(theta_food) 
+            y_food = self.y +msg.distance*np.sin(theta_food) 
+            
+            #popluate the array at the correct row
+            self.food_data[label] = x_food, y_food, theta_food, msg.distance, msg.confidence
+            
+            #indicate that we found the food
+            self.food_found[label] = 1
+            
+            #return true to indicate successful addition
+            return True
+            
+        #else return false
+        else:
+            return False
 
     def go_to_pose(self):
         """ sends the current desired pose to the pose controller """
@@ -147,6 +227,15 @@ class Supervisor:
         """ sends zero velocity to stay put """
 
         vel_g_msg = Twist()
+        """
+        vel_g_msg.linear.x = 0.
+        vel_g_msg.linear.y = 0.
+        vel_g_msg.linear.z = 0.
+        vel_g_msg.angular.x = 0.
+        vel_g_msg.angular.y = 0.
+        vel_g_msg.angular.z = 0.
+        """
+        
         self.cmd_vel_publisher.publish(vel_g_msg)
 
     def close_to(self,x,y,theta):
@@ -175,6 +264,12 @@ class Supervisor:
         """ checks if crossing maneuver is over """
 
         return (self.mode == Mode.CROSS and (rospy.get_rostime()-self.cross_start)>rospy.Duration.from_sec(CROSSING_TIME))
+
+
+    # ---------------------------------------------
+    #                State Machine
+    # ---------------------------------------------
+
 
     def loop(self):
         """ the main loop of the robot. At each iteration, depending on its

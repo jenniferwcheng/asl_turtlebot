@@ -3,7 +3,7 @@
 import rospy
 from nav_msgs.msg import OccupancyGrid, MapMetaData, Path
 from geometry_msgs.msg import Twist, Pose2D, PoseStamped
-from std_msgs.msg import String
+from std_msgs.msg import String, Bool
 import tf
 import numpy as np
 from numpy import linalg
@@ -33,6 +33,7 @@ class Navigator:
     def __init__(self):
         rospy.init_node('turtlebot_navigator', anonymous=True)
         self.mode = Mode.IDLE
+        #self.mode_at_stop = Mode.IDLE
 
         # current state
         self.x = 0.0
@@ -106,9 +107,22 @@ class Navigator:
         rospy.Subscriber('/map', OccupancyGrid, self.map_callback)
         rospy.Subscriber('/map_metadata', MapMetaData, self.map_md_callback)
         rospy.Subscriber('/cmd_nav', Pose2D, self.cmd_nav_callback)
+        #rospy.Subscriber('/sm_interface', Bool, self.interface_callback)
 
         print "finished init"
+     
+    """ 
+    def interface_callback(self,data):
+        rospy.loginfo("Received from interface topic")
         
+        # received true = stop
+        if data is True:   
+            self.mode_at_stop = self.mode # save current mode
+            self.switch_mode(Mode.IDLE)
+        else:
+            self.switch_mode(self.mode_at_stop) # go back to old mode
+        return
+    """    
     def dyn_cfg_callback(self, config, level):
         rospy.loginfo("Reconfigure Request: k1:{k1}, k2:{k2}, k3:{k3}, spline_alpha:{spline_alpha}".format(**config))
         self.pose_controller.k1 = config["k1"]

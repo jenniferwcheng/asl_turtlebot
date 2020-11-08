@@ -848,10 +848,40 @@
         <kinematic>0</kinematic>
         <gravity>1</gravity>
       </link>
-      <pose frame=''>3.55 1.4 0.0 0.0 0.0 3.14159</pose>
+      <pose frame=''>2.478 2.93 0.0 0.0 0.0 1.47</pose>
+    </model>
+    
+    <model name='Banana'>
+      <static>1</static>
+      <link name='banana_link'>
+        <collision name='banana_collision'>
+          <geometry>
+            <mesh>
+              <uri>model://banana/meshes/banana.dae</uri>
+              <scale>1. 1. 1.</scale>
+            </mesh>
+          </geometry>
+        </collision>      
+        <visual name='banana_visual'>
+          <geometry>
+            <mesh>
+              <uri>model://banana/meshes/banana.dae</uri>
+              <scale>1. 1. 1.</scale>
+            </mesh>
+          </geometry>  
+          <material>
+            <script>
+              <uri>model://banana/materials/scripts</uri>
+              <uri>model://banana/materials/textures</uri>
+              <name>banana</name>
+            </script>
+          </material>        
+        </visual>
+      </link>
+      <pose frame=''>3.3355 0.3136 0.198 0.0 0.0 0.0</pose>
     </model>
 
-    <model name='flag'>
+    <!--<model name='flag'>
       <link name='plate'>
         <pose>0 0 0.2425 0 0 0</pose>
         <collision name='collision'>
@@ -1013,7 +1043,7 @@
         <pose>0 0 0.1 0 0 0</pose>
       </joint>
       <pose frame=''>3.35 1.4 0.01 0.0 0.0 3.14159</pose>
-    </model>
+    </model>-->
 
 
     <gravity>0 0 -9.8</gravity>

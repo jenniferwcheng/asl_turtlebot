@@ -18,7 +18,7 @@ BOX_TIMEOUT = 1.0
 class DetectorViz:
 
     def __init__(self):
-        rospy.init_node('turtlebot_detector', anonymous=True)
+        rospy.init_node('turtlebot_detector_viz', anonymous=True)
         self.bridge = CvBridge()
 
         self.tf_listener = TransformListener()

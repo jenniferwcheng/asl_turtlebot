@@ -4,11 +4,12 @@
   <arg name="y_pos" default="1.6"/>
   <arg name="z_pos" default="0.0"/>
   <arg name="gui" default="false"/>
-
+  <arg name="rviz" default="false"/>
 
   <rosparam param="sim">false</rosparam>
   <rosparam param="map">true</rosparam>
-  <rosparam param="use_tf">false</rosparam>
+  <rosparam param="use_tf">true</rosparam>
+  <rosparam param="rviz" subst_value="true">$(arg rviz)</rosparam>
 
   <include file="$(find gazebo_ros)/launch/empty_world.launch">
     <arg name="world_name" value="$(find asl_turtlebot)/world/project_city.world"/>
@@ -74,18 +75,20 @@
 
   <!--<node name="rviz" pkg="rviz" type="rviz" args="-d $(find asl_turtlebot)/rviz/project_sim.rviz"/>-->
   <node pkg="asl_turtlebot" type="goal_commander.py" name="goal_commander" />
-  <node pkg="asl_turtlebot" type="detector.py" name="turtlebot_detector" />
-  
+
   <!-- NAVIGATING MANUALLY -->
   <node pkg="asl_turtlebot" name="nav" type="navigator.py" output="screen"/>
   <node type="rviz" name="rviz" pkg="rviz" args="-d $(find section5)/rviz/my_nav.rviz" />
   <node pkg="section5" type="marker_pub.py" name="marker_node"/>
-  <!--<node pkg="asl_turtlebot" name="pose_controller" type="pose_controller.py"/>-->
    
-  <!-- STOP SIGN STUFF?? -->
-  <node pkg="asl_turtlebot" name="detector" type="detector.py"/>
-  <!--<node pkg="asl_turtlebot" type="gazebo_plot.py" name="gazebo_plot" />-->
-  <!--<node pkg="asl_turtlebot" name="supervisor" type="supervisor.py"/>-->
-    
-  <!--<node pkg="asl_turtlebot" name="puddle_viz" type="puddle_viz.py"/>-->
+  <!-- STOP SIGN DETECTION -->
+  <node pkg="asl_turtlebot" name="detector" type="detector_mobilenet.py" output="screen">
+    <param name="min_score" value="0.5"/>
+  </node>
+  <node pkg="asl_turtlebot" name="turtlebot_supervisor" type="supervisor_nav.py" output="screen"/>
+  
+  <!-- TRASH -->
+  <!--<node pkg="asl_turtlebot" name="turtlebot_detector_viz" type="detector_viz.py"  output="screen"/>-->
+  <!--<node pkg="asl_turtlebot" name="turtlebot_detector" type="detector_mobilenet.py" output="screen"/>-->
+  <!--<node pkg="asl_turtlebot" name="pose_controller" type="pose_controller.py"/>-->
 </launch>

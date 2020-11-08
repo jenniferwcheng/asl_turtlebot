@@ -6,7 +6,7 @@ import rospy
 from asl_turtlebot.msg import DetectedObject
 from gazebo_msgs.msg import ModelStates
 from geometry_msgs.msg import Twist, PoseArray, Pose2D, PoseStamped
-from std_msgs.msg import Float32MultiArray, String
+from std_msgs.msg import Float32MultiArray, String, Bool
 import tf
 
 class Mode(Enum):
@@ -40,10 +40,10 @@ class SupervisorParams:
         self.stop_time = rospy.get_param("~stop_time", 3.)
 
         # Minimum distance from a stop sign to obey it
-        self.stop_min_dist = rospy.get_param("~stop_min_dist", 0.5)
+        self.stop_min_dist = rospy.get_param("~stop_min_dist", 1.5) # 0.5
 
         # Time taken to cross an intersection
-        self.crossing_time = rospy.get_param("~crossing_time", 3.)
+        self.crossing_time = rospy.get_param("~crossing_time", 3.) # 3.
 
         if verbose:
             print("SupervisorParams:")
@@ -82,6 +82,9 @@ class Supervisor:
 
         # Command vel (used for idling)
         self.cmd_vel_publisher = rospy.Publisher('/cmd_vel', Twist, queue_size=10)
+        
+        #Interface for nav FSM (RAM)
+        self.sm_interface_publisher = rospy.Publisher('/sm_interface', Bool, queue_size = 5)
 
         ########## SUBSCRIBERS ##########
 
@@ -146,7 +149,7 @@ class Supervisor:
     def stop_sign_detected_callback(self, msg):
         """ callback for when the detector has found a stop sign. Note that
         a distance of 0 can mean that the lidar did not pickup the stop sign at all """
-
+        rospy.loginfo("I see a stop sign")
         # distance of the stop sign
         dist = msg.distance
 
@@ -196,7 +199,9 @@ class Supervisor:
 
     def init_stop_sign(self):
         """ initiates a stop sign maneuver """
-
+        # make nav machine idle
+        self.sm_interface_publisher.publish(True)
+        
         self.stop_sign_start = rospy.get_rostime()
         self.mode = Mode.STOP
 

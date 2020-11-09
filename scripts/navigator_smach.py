@@ -18,26 +18,16 @@ from enum import Enum
 from dynamic_reconfigure.server import Server
 from asl_turtlebot.cfg import NavigatorConfig
 
-# state machine modes, not all implemented
-class Mode(Enum):
-    IDLE = 0
-    ALIGN = 1
-    TRACK = 2
-    PARK = 3
+import smach
+import smach_ros
+
 
 class Navigator:
     """
-    This node handles point to point turtlebot motion, avoiding obstacles.
+    This class handles point to point turtlebot motion, avoiding obstacles.
     It is the sole node that should publish to cmd_vel
     """
     def __init__(self):
-        rospy.init_node('turtlebot_navigator', anonymous=True)
-        self.mode = Mode.IDLE
-        self.mode_at_stop = None
-        self.x_saved = None
-        self.y_saved = None
-        self.theta_saved = None
-
         # current state
         self.x = 0.0
         self.y = 0.0
@@ -70,7 +60,7 @@ class Navigator:
         
         # Robot limits
         self.v_max = rospy.get_param("~v_max", 0.2)  #0.2  # maximum velocity
-        self.om_max =rospy.get_param("~om_max", 0.1)  #0.4   # maximum angular velocity
+        self.om_max =rospy.get_param("~om_max", 0.4)  #0.4   # maximum angular velocity
 
         self.v_des = 0.12   # desired cruising velocity
         self.theta_start_thresh = 0.05   # threshold in theta to start moving forward when path-following
@@ -82,7 +72,7 @@ class Navigator:
         self.at_thresh_theta = 0.05
 
         # trajectory smoothing
-        self.spline_alpha = 0.01
+        self.spline_alpha = 0.15
         self.traj_dt = 0.1
 
         # trajectory tracking controller parameters
@@ -110,40 +100,10 @@ class Navigator:
         rospy.Subscriber('/map', OccupancyGrid, self.map_callback)
         rospy.Subscriber('/map_metadata', MapMetaData, self.map_md_callback)
         rospy.Subscriber('/cmd_nav', Pose2D, self.cmd_nav_callback)
-        rospy.Subscriber('/sm_interface', Bool, self.interface_callback)
 
-        print "finished init"
-     
-     
-    def interface_callback(self,data):
-        rospy.loginfo("Received from interface topic")
-        
-        # received true = stop
-        if data.data is True:   
-            self.mode_at_stop = self.mode # save current mode
-            
-            # store current goal
-            self.x_saved = self.x_g
-            self.y_saved = self.y_g
-            self.theta_saved = self.theta_g
-            
-            # set goal to nothing
-            self.x_g = None
-            self.y_g = None
-            self.theta_g = None
-            self.switch_mode(Mode.IDLE)
-        '''    
-        else:
-        
-            # reset goal
-            self.x_g = self.x_saved
-            self.y_g = self.y_saved
-            self.theta_g = self.theta_saved
-            
-            self.switch_mode(self.mode_at_stop) # go back to old mode
-            '''
-        return
-        
+        self.new_cmd_nav = False
+        self.new_map = False
+
     def dyn_cfg_callback(self, config, level):
         rospy.loginfo("Reconfigure Request: k1:{k1}, k2:{k2}, k3:{k3}, spline_alpha:{spline_alpha}".format(**config))
         self.pose_controller.k1 = config["k1"]
@@ -167,7 +127,8 @@ class Navigator:
             self.x_g = data.x
             self.y_g = data.y
             self.theta_g = data.theta
-            self.replan()
+            #self.replan() #KJ: Note, removed in SMACH
+            self.new_cmd_nav = True
 
     def map_md_callback(self, msg):
         """
@@ -192,18 +153,16 @@ class Navigator:
                                                   self.map_origin[1],
                                                   8,
                                                   self.map_probs)
-            if self.x_g is not None:
-                # if we have a goal to plan to, replan
-                rospy.loginfo("replanning because of new map")
+            self.new_map = True
 
-    def shutdown_callback(self):
-        """
-        publishes zero velocities upon rospy shutdown
-        """
-        cmd_vel = Twist()
-        cmd_vel.linear.x = 0.0
-        cmd_vel.angular.z = 0.0
-        self.nav_vel_pub.publish(cmd_vel)
+    #def shutdown_callback(self):
+    #    """
+    #    publishes zero velocities upon rospy shutdown
+    #    """
+    #    cmd_vel = Twist()
+    #    cmd_vel.linear.x = 0.0
+    #    cmd_vel.angular.z = 0.0
+    #    self.nav_vel_pub.publish(cmd_vel)
 
     def near_goal(self):
         """
@@ -231,10 +190,10 @@ class Navigator:
 
     def snap_to_grid(self, x):
         return (self.plan_resolution*round(x[0]/self.plan_resolution), self.plan_resolution*round(x[1]/self.plan_resolution))
-
-    def switch_mode(self, new_mode):
-        rospy.loginfo("Switching from %s -> %s", self.mode, new_mode)
-        self.mode = new_mode
+        
+    #def switch_mode(self, new_mode):
+    #    rospy.loginfo("Switching from %s -> %s", self.mode, new_mode)
+    #    self.mode = new_mode
 
     def publish_planned_path(self, path, publisher):
         # publish planned plan for visualization
@@ -268,17 +227,8 @@ class Navigator:
         are all properly set up / with the correct goals loaded
         """
         t = self.get_current_plan_time()
+        V, om = self.traj_controller.compute_control(self.x, self.y, self.theta, t)
 
-        if self.mode == Mode.PARK:
-            V, om = self.pose_controller.compute_control(self.x, self.y, self.theta, t)
-        elif self.mode == Mode.TRACK:
-            V, om = self.traj_controller.compute_control(self.x, self.y, self.theta, t)
-        elif self.mode == Mode.ALIGN:
-            V, om = self.heading_controller.compute_control(self.x, self.y, self.theta, t)
-        else:
-            V = 0.
-            om = 0.
-        
         cmd_vel = Twist()
         cmd_vel.linear.x = V
         cmd_vel.angular.z = om
@@ -288,133 +238,172 @@ class Navigator:
         t = (rospy.get_rostime()-self.current_plan_start_time).to_sec()
         return max(0.0, t)  # clip negative time to 0
 
-    def replan(self):
-        """
-        loads goal into pose controller
-        runs planner based on current pose
-        if plan long enough to track:
-            smooths resulting traj, loads it into traj_controller
-            sets self.current_plan_start_time
-            sets mode to ALIGN
-        else:
-            sets mode to PARK
-        """
-        # Make sure we have a map
-        if not self.occupancy:
+
+def check_inputs(userdata):
+    try:
+        (translation,rotation) = userdata.nav_out.trans_listener.lookupTransform('/map', '/base_footprint', rospy.Time(0))
+        userdata.nav_out.x = translation[0]
+        userdata.nav_out.y = translation[1]
+        euler = tf.transformations.euler_from_quaternion(rotation)
+        userdata.nav_out.theta = euler[2]
+    except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException) as e:
+        userdata.nav_out.current_plan = []
+        rospy.loginfo("Navigator: waiting for state info")
+        return 'error'
+    if userdata.nav_in.new_cmd_nav:
+        userdata.nav_out.new_cmd_nav = False
+        return 'new_cmd_nav'
+    elif userdata.nav_in.new_map:
+        userdata.nav_out.new_map = False
+        return 'new_map'
+    return None
+
+
+#Just waiting for commands
+class Waiting(smach.State):
+    def __init__(self):
+        smach.State.__init__(self, 
+                             outcomes=['nop', 'new_cmd_nav', 'new_map', 'error'],
+                             input_keys=['nav_in', 'nav_out'],
+                             output_keys=['nav_out'])
+
+    def execute(self, userdata):
+        rospy.loginfo('Executing state WAITING')
+        ci_outcome = check_inputs(userdata)
+        if ci_outcome:
+            return ci_outcome
+
+        # run the state
+        cmd_vel = Twist()
+        cmd_vel.linear.x = 0.0
+        cmd_vel.angular.z = 0.0
+        userdata.nav_out.nav_vel_pub.publish(cmd_vel)
+        rospy.sleep(.5)
+
+        return 'nop'
+
+
+class Planning(smach.State):
+    def __init__(self):
+        smach.State.__init__(self, 
+                             outcomes=['success', 'failure', 'new_cmd_nav', 'new_map', 'error'],
+                             input_keys=['nav_in', 'nav_out'],
+                             output_keys=['nav_out'])
+
+    def execute(self, userdata):
+        rospy.loginfo('Executing state PLANNING')
+        ci_outcome = check_inputs(userdata)
+        if ci_outcome:
+            return ci_outcome
+
+        if not userdata.nav_in.occupancy:
             rospy.loginfo("Navigator: replanning canceled, waiting for occupancy map.")
-            self.switch_mode(Mode.IDLE)
-            return
+            return 'failure'
 
         # Attempt to plan a path
-        state_min = self.snap_to_grid((-self.plan_horizon, -self.plan_horizon))
-        state_max = self.snap_to_grid((self.plan_horizon, self.plan_horizon))
-        x_init = self.snap_to_grid((self.x, self.y))
-        self.plan_start = x_init
-        x_goal = self.snap_to_grid((self.x_g, self.y_g))
-        problem = AStar(state_min,state_max,x_init,x_goal,self.occupancy,self.plan_resolution)
+        state_min = userdata.nav_out.snap_to_grid((-userdata.nav_in.plan_horizon, -userdata.nav_in.plan_horizon))
+        state_max = userdata.nav_out.snap_to_grid((userdata.nav_in.plan_horizon, userdata.nav_in.plan_horizon))
+        x_init = userdata.nav_out.snap_to_grid((userdata.nav_in.x, userdata.nav_in.y))
+        userdata.nav_out.plan_start = x_init
+        x_goal = userdata.nav_out.snap_to_grid((userdata.nav_in.x_g, userdata.nav_in.y_g))
+        problem = AStar(state_min,state_max,x_init,x_goal,userdata.nav_out.occupancy,userdata.nav_out.plan_resolution)
 
         rospy.loginfo("Navigator: computing navigation plan")
         success =  problem.solve()
-        print("Ran Solve")
         if not success:
             rospy.loginfo("Planning failed")
-            return
+            return 'failure'
         rospy.loginfo("Planning Succeeded")
 
         planned_path = problem.path
         
-
         # Check whether path is too short
         if len(planned_path) < 4:
             rospy.loginfo("Path too short to track")
-            self.switch_mode(Mode.PARK)
-            return
+            return 'failure'
 
         # Smooth and generate a trajectory
-        traj_new, t_new = compute_smoothed_traj(planned_path, self.v_des, self.spline_alpha, self.traj_dt)
-
-        # If currently tracking a trajectory, check whether new trajectory will take more time to follow
-        if self.mode == Mode.TRACK:
-            t_remaining_curr = self.current_plan_duration - self.get_current_plan_time()
-
-            # Estimate duration of new trajectory
-            th_init_new = traj_new[0,2]
-            th_err = wrapToPi(th_init_new - self.theta)
-            t_init_align = abs(th_err/self.om_max)
-            t_remaining_new = t_init_align + t_new[-1]
-
-            if t_remaining_new > t_remaining_curr:
-                rospy.loginfo("New plan rejected (longer duration than current plan)")
-                self.publish_smoothed_path(traj_new, self.nav_smoothed_path_rej_pub)
-                return
+        traj_new, t_new = compute_smoothed_traj(planned_path, userdata.nav_in.v_des, userdata.nav_in.spline_alpha, userdata.nav_in.traj_dt)
 
         # Otherwise follow the new plan
-        self.publish_planned_path(planned_path, self.nav_planned_path_pub)
-        self.publish_smoothed_path(traj_new, self.nav_smoothed_path_pub)
+        userdata.nav_out.publish_planned_path(planned_path, userdata.nav_out.nav_planned_path_pub)
+        userdata.nav_out.publish_smoothed_path(traj_new, userdata.nav_out.nav_smoothed_path_pub)
 
-        self.pose_controller.load_goal(self.x_g, self.y_g, self.theta_g)
-        self.traj_controller.load_traj(t_new, traj_new)
+        userdata.nav_out.pose_controller.load_goal(userdata.nav_in.x_g, userdata.nav_in.y_g, userdata.nav_in.theta_g)
+        userdata.nav_out.traj_controller.load_traj(t_new, traj_new)
 
-        self.current_plan_start_time = rospy.get_rostime()
-        self.current_plan_duration = t_new[-1]
+        userdata.nav_out.current_plan_start_time = rospy.get_rostime()
+        userdata.nav_out.current_plan_duration = t_new[-1]
 
-        self.th_init = traj_new[0,2]
-        self.heading_controller.load_goal(self.th_init)
+        userdata.nav_out.th_init = traj_new[0,2]
+        userdata.nav_out.heading_controller.load_goal(traj_new[0,2])
 
-        if not self.aligned():
-            rospy.loginfo("Not aligned with start direction")
-            self.switch_mode(Mode.ALIGN)
-            return
+        return 'success'
 
-        rospy.loginfo("Ready to track")
-        self.switch_mode(Mode.TRACK)
 
-    def run(self):
-        rate = rospy.Rate(10) # 10 Hz
-        while not rospy.is_shutdown():
-            # try to get state information to update self.x, self.y, self.theta
-            try:
-                (translation,rotation) = self.trans_listener.lookupTransform('/map', '/base_footprint', rospy.Time(0))
-                self.x = translation[0]
-                self.y = translation[1]
-                euler = tf.transformations.euler_from_quaternion(rotation)
-                self.theta = euler[2]
-            except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException) as e:
-                self.current_plan = []
-                rospy.loginfo("Navigator: waiting for state info")
-                self.switch_mode(Mode.IDLE)
-                print e
-                pass
+#Tracking state is have existing plan that you are following until you reach end
+class Tracking(smach.State):
+    def __init__(self):
+        smach.State.__init__(self, 
+                             outcomes=['nop', 'done', 'plan_expired', 'new_cmd_nav', 'new_map', 'error'],
+                             input_keys=['nav_in', 'nav_out'],
+                             output_keys=['nav_out'])
 
-            # STATE MACHINE LOGIC
-            # some transitions handled by callbacks
-            if self.mode == Mode.IDLE:
-                pass
-            elif self.mode == Mode.ALIGN:
-                if self.aligned():
-                    self.current_plan_start_time = rospy.get_rostime()
-                    self.switch_mode(Mode.TRACK)
-            elif self.mode == Mode.TRACK:
-                if self.near_goal():
-                    self.switch_mode(Mode.PARK)
-                elif not self.close_to_plan_start():
-                    rospy.loginfo("replanning because far from start")
-                    self.replan()
-                elif (rospy.get_rostime() - self.current_plan_start_time).to_sec() > self.current_plan_duration:
-                    rospy.loginfo("replanning because out of time")
-                    self.replan() # we aren't near the goal but we thought we should have been, so replan
-            elif self.mode == Mode.PARK:
-                if self.at_goal():
-                    # forget about goal:
-                    self.x_g = None
-                    self.y_g = None
-                    self.theta_g = None
-                    self.switch_mode(Mode.IDLE)
+    def execute(self, userdata):
+        rospy.loginfo('Executing state TRACKING')
+        ci_outcome = check_inputs(userdata)
+        if ci_outcome:
+            return ci_outcome
 
-            self.publish_control()
-            rate.sleep()
+        userdata.nav_out.publish_control()
 
-if __name__ == '__main__':    
+        if userdata.nav_out.near_goal():
+            userdata.nav_out.x_g = None
+            userdata.nav_out.y_g = None
+            userdata.nav_out.theta_g = None
+            return 'done'
+        elif not userdata.nav_out.close_to_plan_start():
+            rospy.loginfo("replanning because far from start")
+            return 'plan_expired'
+        elif (rospy.get_rostime() - userdata.nav_out.current_plan_start_time).to_sec() > userdata.nav_out.current_plan_duration:
+            rospy.loginfo("replanning because out of time")
+            return 'plan_expired'
+        return 'nop'
+
+
+def main():
+    rospy.init_node('turtlebot_navigator_smach')
+
+    # Create a SMACH state machine
+    sm = smach.StateMachine(outcomes=[])
+
     nav = Navigator()
-    rospy.on_shutdown(nav.shutdown_callback)
-    nav.run()
+    sm.userdata.nav = nav
+    remap = remapping={'nav_in': 'nav',
+                       'nav_out': 'nav'}
+
+    # Open the container
+    with sm:
+        # Add states to the container
+        smach.StateMachine.add('WAITING', Waiting(), 
+                               transitions={'nop':'WAITING', 'new_cmd_nav':'PLANNING', 'new_map':'WAITING', 'error': 'WAITING'},
+                               remapping=remap)
+
+        smach.StateMachine.add('PLANNING', Planning(), 
+                               transitions={'success':'TRACKING', 'failure':'WAITING', 'new_cmd_nav':'PLANNING', 'new_map':'PLANNING', 'error': 'WAITING'},
+                               remapping=remap)     
+
+        smach.StateMachine.add('TRACKING', Tracking(), 
+                               transitions={'nop':'TRACKING', 'done': 'WAITING', 'plan_expired':'PLANNING', 'new_cmd_nav':'PLANNING', 'new_map':'PLANNING', 'error': 'WAITING'},
+                               remapping=remap)
+
+
+    sis = smach_ros.IntrospectionServer('turtlebot_navigator_introspection', sm, '/SM_NAV')
+    #sis.start() 
+
+    # Execute SMACH plan
+    outcome = sm.execute()
+
+
+if __name__ == '__main__':
+    main()

@@ -2,7 +2,7 @@
 
 import rospy
 from gazebo_msgs.msg import ModelStates
-from std_msgs.msg import Float32MultiArray, String
+from std_msgs.msg import Float32MultiArray, String, Bool
 from geometry_msgs.msg import Twist, PoseArray, Pose2D, PoseStamped
 from asl_turtlebot.msg import DetectedObject
 import tf
@@ -27,13 +27,13 @@ POS_EPS = .1
 THETA_EPS = .3
 
 # time to stop at a stop sign
-STOP_TIME = 10
+STOP_TIME = 3
 
 # minimum distance from a stop sign to obey it
 STOP_MIN_DIST = .5
 
 # time taken to cross an intersection
-CROSSING_TIME = 3
+CROSSING_TIME = 10
 
 # the number of food items
 FOOD_ITEMS = 2
@@ -82,7 +82,9 @@ class Supervisor:
         self.nav_goal_publisher = rospy.Publisher('/cmd_nav', Pose2D, queue_size=10)
         # command vel (used for idling)
         self.cmd_vel_publisher = rospy.Publisher('/cmd_vel', Twist, queue_size=10)
-
+        # state machine interface
+        self.sm_interface_publisher = rospy.Publisher('/sm_interface', Bool, queue_size =10)
+        
         # ------------------------
         #       subscribers
         # ------------------------
@@ -245,7 +247,11 @@ class Supervisor:
 
     def init_stop_sign(self):
         """ initiates a stop sign maneuver """
-
+        # tell nav to idle
+        msg = Bool()
+        msg.data = True
+        self.sm_interface_publisher.publish(msg)
+        
         self.stop_sign_start = rospy.get_rostime()
         self.mode = Mode.STOP
 
@@ -256,7 +262,10 @@ class Supervisor:
         
     def init_crossing(self):
         """ initiates an intersection crossing maneuver """
-
+        # tell nav to resume
+        msg = Bool()
+        msg.data = False
+        self.sm_interface_publisher.publish(msg)
         self.cross_start = rospy.get_rostime()
         self.mode = Mode.CROSS
 

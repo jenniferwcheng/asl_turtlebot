@@ -19,7 +19,7 @@
     <arg name="gui" value="$(arg gui)"/>
   </include>
 
-  <param name="robot_description" command="$(find xacro)/xacro.py $(find asl_turtlebot)/urdf/turtlebot3_$(arg model)_gripper.urdf.xacro" />
+  <param name="robot_description" command="$(find xacro)/xacro.py $(find asl_turtlebot)/urdf/turtlebot3_$(arg model).urdf.xacro" />
 
   <node name="spawn_urdf" pkg="gazebo_ros" type="spawn_model" args="-urdf -model turtlebot3_burger -x $(arg x_pos) -y $(arg y_pos) -z $(arg z_pos) -param robot_description" />
 
@@ -77,6 +77,7 @@
   <node pkg="asl_turtlebot" type="goal_commander.py" name="goal_commander" />
 
   <!-- NAVIGATING MANUALLY -->
+  <!--<node pkg="asl_turtlebot" name="nav" type="navigator_smach.py" output="screen"/>-->
   <node pkg="asl_turtlebot" name="nav" type="navigator.py" output="screen"/>
   <node type="rviz" name="rviz" pkg="rviz" args="-d $(find section5)/rviz/my_nav.rviz" />
   <node pkg="section5" type="marker_pub.py" name="marker_node"/>

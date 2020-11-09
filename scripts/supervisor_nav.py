@@ -4,8 +4,10 @@ import rospy
 from gazebo_msgs.msg import ModelStates
 from std_msgs.msg import Float32MultiArray, String, Bool
 from geometry_msgs.msg import Twist, PoseArray, Pose2D, PoseStamped
+from visualization_msgs.msg import Marker
 from asl_turtlebot.msg import DetectedObject
 import tf
+import tf2_ros
 import math
 from enum import Enum
 from utils import wrapToPi 
@@ -49,7 +51,7 @@ class Mode(Enum):
 
 
 # food indices
-BANANA = 0
+HOT_DOG = 0
 APPLE = 1
  
 
@@ -68,6 +70,7 @@ class Supervisor:
         self.mode = Mode.IDLE
         self.last_mode_printed = None
         self.trans_listener = tf.TransformListener()
+        #self.trans_broadcaster = tf.TransformBroadcaster()
         #list of the food and it's location
         self.food_data = np.zeros((FOOD_ITEMS, 5))
         self.food_found = [0, 0]
@@ -84,6 +87,8 @@ class Supervisor:
         self.cmd_vel_publisher = rospy.Publisher('/cmd_vel', Twist, queue_size=10)
         # state machine interface
         self.sm_interface_publisher = rospy.Publisher('/sm_interface', Bool, queue_size =10)
+        # for publishing foor markers
+        self.vis_pub = rospy.Publisher('marker_topic', Marker, queue_size=10)
         
         # ------------------------
         #       subscribers
@@ -91,8 +96,8 @@ class Supervisor:
         
         # stop sign detector
         rospy.Subscriber('/detector/stop_sign', DetectedObject, self.stop_sign_detected_callback)
-        #banana detector
-        rospy.Subscriber('/detector/kite', DetectedObject, self.banana_detected_callback) # this is technically banana not kite
+        # hot dog detector
+        rospy.Subscriber('/detector/hot_dog', DetectedObject, self.hot_dog_detected_callback) 
         '''
         #[Object]
         rospy.Subscriber('/detector/[object]', DetectedObject, self.[object]_detected_callback)
@@ -149,6 +154,7 @@ class Supervisor:
         self.y_g = msg.y
         self.theta_g = msg.theta
         self.mode = Mode.NAV
+        
     
     # ---------------------------------------------
     #         Food Detection Callbacks
@@ -165,13 +171,13 @@ class Supervisor:
         if dist > 0 and dist < STOP_MIN_DIST and self.mode == Mode.NAV:
             self.init_stop_sign()
             
-    def banana_detected_callback(self, msg):
+    def hot_dog_detected_callback(self, msg):
     
-        rospy.loginfo("Found ba-ba-ba ba-ba-nana")
-        if self.add_food_to_list(msg,BANANA):
-            rospy.loginfo("Succesfully added banana")
+        rospy.loginfo("Found hot diggity dog")
+        if self.add_food_to_list(msg,HOT_DOG):
+            rospy.loginfo("Succesfully added the hot dog")
         else:
-            rospy.loginfo("Did not add banana")
+            rospy.loginfo("Did not add hot dog")
             
     # ---------------------------------------------
     #             Helper Functions
@@ -183,8 +189,8 @@ class Supervisor:
         Arguments:msg from the topic, food item label
         Returns:False if nothing was added, true if added
         '''
-        #check to see if the food was added
-        if self.food_found[label] is 0:
+        #check to see if the food was added or we have a better distance
+        if self.food_found[label] is 0 or msg.distance < self.food_data[label,3]:
             #get the angle of the frame wrt the world        
             theta_food = 0.5*wrapToPi(msg.thetaleft-msg.thetaright) + self.theta
             
@@ -198,12 +204,56 @@ class Supervisor:
             #indicate that we found the food
             self.food_found[label] = 1
             
+            # add marker to location of food
+            #self.broadcast_tf(x_food,y_food,0)
+            self.add_marker(x_food, y_food, label)
+            
             #return true to indicate successful addition
             return True
             
         #else return false
         else:
             return False
+            
+    def add_marker(self, x, y, label):
+        marker = Marker()
+
+        marker.header.frame_id = "map"
+        marker.header.stamp = rospy.Time()
+
+        # IMPORTANT: If you're creating multiple markers, 
+        #            each need to have a separate marker ID.
+        marker.id = label
+
+        marker.type = 2 # sphere
+
+        marker.pose.position.x = x
+        marker.pose.position.y = y
+        marker.pose.position.z = 0
+
+        marker.pose.orientation.x = 0.0
+        marker.pose.orientation.y = 0.0
+        marker.pose.orientation.z = 0.0
+        marker.pose.orientation.w = 1.0
+
+        marker.scale.x = 0.1
+        marker.scale.y = 0.1
+        marker.scale.z = 0.1
+
+        marker.color.a = 1.0 # Don't forget to set the alpha!
+        marker.color.r = 0.0
+        marker.color.g = 0.0
+        marker.color.b = 1.0
+        
+        self.vis_pub.publish(marker)
+        print('Published marker!')
+            
+    def broadcast_tf(self,x,y,th):
+        tf2_ros.StaticTransformBroadcaster().sendTransform((x,y,0.0),
+                            tf.transformations.quaternion_from_euler(0,0,th),
+                            rospy.Time.now(),
+                            "/food_marker",
+                            "/map")
 
     def go_to_pose(self):
         """ sends the current desired pose to the pose controller """

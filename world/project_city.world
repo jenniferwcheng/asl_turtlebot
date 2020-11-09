@@ -881,6 +881,50 @@
       <pose frame=''>3.3355 0.3136 0.198 0.0 0.0 0.0</pose>
     </model>
     
+    <model name='banana_box'>
+        <link name='link'>
+      <pose frame=''>4.325123 1.5938 0.24907 1.57079632679 0.0 -1.57079632679</pose>
+          <visual name='visual'>
+            <geometry>
+              <box>
+                <size>0.2 0.15 0.0001</size>
+              </box>
+            </geometry>
+                 <material>
+         	<ambient>0.423 0.019 0.035 1</ambient>
+              <diffuse>0.423 0.019 0.035 1</diffuse>
+              <specular>0.01 0.01 0.01 1</specular>
+              <emissive>0 0 0 1</emissive>
+            </material>
+          
+            <cast_shadows>1</cast_shadows>
+            <transparency>0</transparency>
+          </visual>
+        </link>
+      <link name='link_1'>
+      <pose frame=''>4.325123 1.5938 0.24907 1.57079632679 0.0 -1.57079632679</pose>
+          <visual name='visual'>
+            <geometry>
+              <box>
+                <size>0.4 0.3 0.001</size>
+              </box>
+            </geometry>
+                 <material>
+              <script>
+                <uri>model://banana_box/materials/scripts</uri>
+                <uri>model://banana_box/materials/textures</uri>
+                <name>banana_pat</name>
+              </script>
+            </material>
+          
+            <cast_shadows>1</cast_shadows>
+            <transparency>0</transparency>
+          </visual>
+        </link>
+        <static>1</static>
+        <allow_auto_disable>1</allow_auto_disable>
+      </model>
+    
     
 
     <!--<model name='flag'>

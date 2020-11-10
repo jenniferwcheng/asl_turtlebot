@@ -1,0 +1,16 @@
+material hotdog_pat
+{
+  technique
+  {
+    pass
+    {
+      texture_unit
+      {
+	    rotate 90
+        texture hotdog_biscuits.jpg
+	    scale 1 1
+      }
+    }
+  }
+}
+

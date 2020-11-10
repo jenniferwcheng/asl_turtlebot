@@ -1,0 +1,16 @@
+material charmander_pat
+{
+  technique
+  {
+    pass
+    {
+      texture_unit
+      {
+	    rotate 90
+        texture charmander.png
+	    scale 1 1
+      }
+    }
+  }
+}
+

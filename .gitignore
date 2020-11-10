@@ -1,5 +1,4 @@
 .DS_Store
 *.pyc
 /media
-/models
 /tfmodels/ssd_resnet_50_fpn_coco.pb

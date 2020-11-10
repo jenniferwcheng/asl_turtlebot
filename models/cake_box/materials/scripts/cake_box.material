@@ -1,0 +1,16 @@
+material cake_pat
+{
+  technique
+  {
+    pass
+    {
+      texture_unit
+      {
+	    rotate 90
+        texture cake_biscuits.jpg
+	    scale 1 1
+      }
+    }
+  }
+}
+

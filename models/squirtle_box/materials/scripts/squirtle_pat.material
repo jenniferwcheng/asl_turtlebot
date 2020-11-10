@@ -1,0 +1,16 @@
+material squirtle_pat
+{
+  technique
+  {
+    pass
+    {
+      texture_unit
+      {
+	    rotate 90
+        texture squirtle.PNG
+	    scale 1 1
+      }
+    }
+  }
+}
+

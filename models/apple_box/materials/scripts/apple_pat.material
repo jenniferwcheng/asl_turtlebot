@@ -1,0 +1,16 @@
+material apple_pat
+{
+  technique
+  {
+    pass
+    {
+      texture_unit
+      {
+	    rotate 90
+        texture apple_biscuits.png
+	    scale 1 1
+      }
+    }
+  }
+}
+

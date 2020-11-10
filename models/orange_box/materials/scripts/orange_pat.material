@@ -1,0 +1,16 @@
+material orange_pat
+{
+  technique
+  {
+    pass
+    {
+      texture_unit
+      {
+	    rotate 90
+        texture orange_biscuits.jpg
+	    scale 1 1
+      }
+    }
+  }
+}
+

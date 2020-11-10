@@ -794,7 +794,7 @@
     
     <model name='Stop Sign'>
       <link name='link'>
-        <collision name='collision'>
+        <!--<collision name='collision'>
           <geometry>
             <mesh>
               <uri>model://stop_sign/meshes/stop_sign.dae</uri>
@@ -817,7 +817,7 @@
               </ode>
             </friction>
           </surface>
-        </collision>
+        </collision>-->
         <visual name='visual'>
           <geometry>
             <mesh>
@@ -848,10 +848,10 @@
         <kinematic>0</kinematic>
         <gravity>1</gravity>
       </link>
-      <pose frame=''>2.4835597 2.985341 0.0 0.0 0.0 1.57079632679</pose>
+      <pose frame=''>2.149577 2.1055752 0.0 0.0 0.0 0.0</pose>
     </model>
     
-    <model name='Banana'>
+    <!--<model name='Banana'>
       <static>1</static>
       <link name='banana_link'>
         <collision name='banana_collision'>
@@ -879,30 +879,11 @@
         </visual>
       </link>
       <pose frame=''>3.3355 0.3136 0.198 0.0 0.0 0.0</pose>
-    </model>
+    </model>-->
     
-    <model name='banana_box'>
-        <link name='link'>
-      <pose frame=''>4.325123 1.5938 0.24907 1.57079632679 0.0 -1.57079632679</pose>
-          <visual name='visual'>
-            <geometry>
-              <box>
-                <size>0.2 0.15 0.0001</size>
-              </box>
-            </geometry>
-                 <material>
-         	<ambient>0.423 0.019 0.035 1</ambient>
-              <diffuse>0.423 0.019 0.035 1</diffuse>
-              <specular>0.01 0.01 0.01 1</specular>
-              <emissive>0 0 0 1</emissive>
-            </material>
-          
-            <cast_shadows>1</cast_shadows>
-            <transparency>0</transparency>
-          </visual>
-        </link>
+    <model name='hotdog_box'>
+    <pose frame=''>0.001 1.496985 0.24907 1.57079632679 0.0 -1.57079632679</pose>
       <link name='link_1'>
-      <pose frame=''>4.325123 1.5938 0.24907 1.57079632679 0.0 -1.57079632679</pose>
           <visual name='visual'>
             <geometry>
               <box>
@@ -911,9 +892,9 @@
             </geometry>
                  <material>
               <script>
-                <uri>model://banana_box/materials/scripts</uri>
-                <uri>model://banana_box/materials/textures</uri>
-                <name>banana_pat</name>
+                <uri>model://hotdog_box/materials/scripts</uri>
+                <uri>model://hotdog_box/materials/textures</uri>
+                <name>hotdog_pat</name>
               </script>
             </material>
           
@@ -924,8 +905,182 @@
         <static>1</static>
         <allow_auto_disable>1</allow_auto_disable>
       </model>
+      
+      <model name='banana_box'>
+        <pose frame=''>2.617258 1.562461 0.24907 1.57079632679 0.0 -1.57079632679</pose>
+          <link name='link_1'>
+              <visual name='visual'>
+                <geometry>
+                  <box>
+                    <size>0.4 0.3 0.001</size>
+                  </box>
+                </geometry>
+                     <material>
+                  <script>
+                    <uri>model://banana_box/materials/scripts</uri>
+                    <uri>model://banana_box/materials/textures</uri>
+                    <name>banana_pat</name>
+                  </script>
+                </material>
+              
+                <cast_shadows>1</cast_shadows>
+                <transparency>0</transparency>
+              </visual>
+            </link>
+            <static>1</static>
+            <allow_auto_disable>1</allow_auto_disable>
+      </model>
     
-    
+    <model name='orange_box'>
+        <pose frame=''>2.061475 0.936684 0.24907 1.57079632679 0.0 -1.57079632679</pose>
+          <link name='link_1'>
+              <visual name='visual'>
+                <geometry>
+                  <box>
+                    <size>0.4 0.3 0.001</size>
+                  </box>
+                </geometry>
+                     <material>
+                  <script>
+                    <uri>model://orange_box/materials/scripts</uri>
+                    <uri>model://orange_box/materials/textures</uri>
+                    <name>orange_pat</name>
+                  </script>
+                </material>
+              
+                <cast_shadows>1</cast_shadows>
+                <transparency>0</transparency>
+              </visual>
+            </link>
+            <static>1</static>
+            <allow_auto_disable>1</allow_auto_disable>
+      </model>
+      
+      <model name='apple_box'>
+        <pose frame=''>3.6572 1.551728 0.24907 1.57079632679 0.0 -1.57079632679</pose>
+          <link name='link_1'>
+              <visual name='visual'>
+                <geometry>
+                  <box>
+                    <size>0.4 0.3 0.001</size>
+                  </box>
+                </geometry>
+                     <material>
+                  <script>
+                    <uri>model://apple_box/materials/scripts</uri>
+                    <uri>model://apple_box/materials/textures</uri>
+                    <name>apple_pat</name>
+                  </script>
+                </material>
+              
+                <cast_shadows>1</cast_shadows>
+                <transparency>0</transparency>
+              </visual>
+            </link>
+            <static>1</static>
+            <allow_auto_disable>1</allow_auto_disable>
+      </model>
+      
+      <model name='cake_box'>
+        <pose frame=''>2.41 3.031854 0.250166 1.57079632679 0.0 3.14159</pose>
+          <link name='link_1'>
+              <visual name='visual'>
+                <geometry>
+                  <box>
+                    <size>0.4 0.3 0.001</size>
+                  </box>
+                </geometry>
+                     <material>
+                  <script>
+                    <uri>model://cake_box/materials/scripts</uri>
+                    <uri>model://cake_box/materials/textures</uri>
+                    <name>cake_pat</name>
+                  </script>
+                </material>
+              
+                <cast_shadows>1</cast_shadows>
+                <transparency>0</transparency>
+              </visual>
+            </link>
+            <static>1</static>
+            <allow_auto_disable>1</allow_auto_disable>
+      </model>
+      
+      <model name='squirtle_box'>
+        <pose frame=''>2.783312 0.02 0.2017 1.57079632679 0.0 0.0</pose>
+          <link name='link_1'>
+              <visual name='visual'>
+                <geometry>
+                  <box>
+                    <size>0.4 0.3 0.001</size>
+                  </box>
+                </geometry>
+                     <material>
+                  <script>
+                    <uri>model://squirtle_box/materials/scripts</uri>
+                    <uri>model://squirtle_box/materials/textures</uri>
+                    <name>squirtle_pat</name>
+                  </script>
+                </material>
+              
+                <cast_shadows>1</cast_shadows>
+                <transparency>0</transparency>
+              </visual>
+            </link>
+            <static>1</static>
+            <allow_auto_disable>1</allow_auto_disable>
+      </model>
+      
+      <model name='bulbasaur_box'>
+        <pose frame=''>1.752422 0.02 0.2017 1.57079632679 0.0 0.0</pose>
+          <link name='link_1'>
+              <visual name='visual'>
+                <geometry>
+                  <box>
+                    <size>0.4 0.3 0.001</size>
+                  </box>
+                </geometry>
+                     <material>
+                  <script>
+                    <uri>model://bulbasaur_box/materials/scripts</uri>
+                    <uri>model://bulbasaur_box/materials/textures</uri>
+                    <name>bulbasaur_pat</name>
+                  </script>
+                </material>
+              
+                <cast_shadows>1</cast_shadows>
+                <transparency>0</transparency>
+              </visual>
+            </link>
+            <static>1</static>
+            <allow_auto_disable>1</allow_auto_disable>
+      </model>
+      
+      
+      <model name='charmander_box'>
+        <pose frame=''>0.717 0.02 0.2017 1.57079632679 0.0 0.0</pose>
+          <link name='link_1'>
+              <visual name='visual'>
+                <geometry>
+                  <box>
+                    <size>0.4 0.3 0.001</size>
+                  </box>
+                </geometry>
+                     <material>
+                  <script>
+                    <uri>model://charmander_box/materials/scripts</uri>
+                    <uri>model://charmander_box/materials/textures</uri>
+                    <name>charmander_pat</name>
+                  </script>
+                </material>
+              
+                <cast_shadows>1</cast_shadows>
+                <transparency>0</transparency>
+              </visual>
+            </link>
+            <static>1</static>
+            <allow_auto_disable>1</allow_auto_disable>
+      </model>
 
     <!--<model name='flag'>
       <link name='plate'>

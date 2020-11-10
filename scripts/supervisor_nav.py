@@ -38,7 +38,7 @@ STOP_MIN_DIST = .5
 CROSSING_TIME = 10
 
 # the number of food items
-FOOD_ITEMS = 2
+FOOD_ITEMS = 5
 
 # state machine modes, not all implemented
 class Mode(Enum):
@@ -53,6 +53,9 @@ class Mode(Enum):
 # food indices
 HOT_DOG = 0
 APPLE = 1
+ORANGE = 2
+CAKE = 3
+BANANA = 4
  
 
 print "supervisor settings:\n"
@@ -73,7 +76,7 @@ class Supervisor:
         #self.trans_broadcaster = tf.TransformBroadcaster()
         #list of the food and it's location
         self.food_data = np.zeros((FOOD_ITEMS, 5))
-        self.food_found = [0, 0]
+        self.food_found = [0, 0, 0, 0, 0]
         
         # ------------------------
         #       publishers
@@ -97,7 +100,15 @@ class Supervisor:
         # stop sign detector
         rospy.Subscriber('/detector/stop_sign', DetectedObject, self.stop_sign_detected_callback)
         # hot dog detector
-        rospy.Subscriber('/detector/hot_dog', DetectedObject, self.hot_dog_detected_callback) 
+        rospy.Subscriber('/detector/hot_dog', DetectedObject, self.hot_dog_detected_callback)
+        # apple detector
+        rospy.Subscriber('/detector/apple', DetectedObject, self.apple_detected_callback) 
+        # orange detector
+        rospy.Subscriber('/detector/orange', DetectedObject, self.orange_detected_callback) 
+        # cake detector
+        rospy.Subscriber('/detector/cake', DetectedObject, self.cake_detected_callback) 
+        # banana detector
+        rospy.Subscriber('/detector/banana', DetectedObject, self.banana_detected_callback) 
         '''
         #[Object]
         rospy.Subscriber('/detector/[object]', DetectedObject, self.[object]_detected_callback)
@@ -179,6 +190,38 @@ class Supervisor:
         else:
             rospy.loginfo("Did not add hot dog")
             
+    def apple_detected_callback(self, msg):
+    
+        rospy.loginfo("Found apple")
+        if self.add_food_to_list(msg,APPLE):
+            rospy.loginfo("Succesfully added the apple")
+        else:
+            rospy.loginfo("Did not add apple")
+            
+    def orange_detected_callback(self, msg):
+    
+        rospy.loginfo("Found orange")
+        if self.add_food_to_list(msg,ORANGE):
+            rospy.loginfo("Succesfully added the orange")
+        else:
+            rospy.loginfo("Did not add orange")
+            
+    def cake_detected_callback(self, msg):
+    
+        rospy.loginfo("Found cake")
+        if self.add_food_to_list(msg,CAKE):
+            rospy.loginfo("Succesfully added the cake")
+        else:
+            rospy.loginfo("Did not add cake")
+            
+    def banana_detected_callback(self, msg):
+    
+        rospy.loginfo("Found banana")
+        if self.add_food_to_list(msg,BANANA):
+            rospy.loginfo("Succesfully added the banana")
+        else:
+            rospy.loginfo("Did not add banana")
+            
     # ---------------------------------------------
     #             Helper Functions
     # ---------------------------------------------
@@ -241,9 +284,27 @@ class Supervisor:
         marker.scale.z = 0.1
 
         marker.color.a = 1.0 # Don't forget to set the alpha!
-        marker.color.r = 0.0
-        marker.color.g = 0.0
-        marker.color.b = 1.0
+        
+        if label == HOT_DOG:
+            marker.color.r = 1.0
+            marker.color.g = 0.2
+            marker.color.b = 0.6
+        elif label == APPLE:
+            marker.color.r = 1.0
+            marker.color.g = 0.0
+            marker.color.b = 0.0
+        elif label == ORANGE:
+            marker.color.r = 1.0
+            marker.color.g = 0.5
+            marker.color.b = 0.0
+        elif label == CAKE:
+            marker.color.r = 0.4
+            marker.color.g = 0.0
+            marker.color.b = 0.0
+        elif label == BANANA:
+            marker.color.r = 1.0
+            marker.color.g = 1.0
+            marker.color.b = 0.0
         
         self.vis_pub.publish(marker)
         print('Published marker!')

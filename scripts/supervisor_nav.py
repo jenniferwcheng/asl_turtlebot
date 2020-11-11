@@ -7,10 +7,10 @@ from geometry_msgs.msg import Twist, PoseArray, Pose2D, PoseStamped
 from visualization_msgs.msg import Marker
 from asl_turtlebot.msg import DetectedObject
 import tf
-import tf2_ros
+import tf2_ros #do we still need this?
 import math
 from enum import Enum
-from utils import wrapToPi 
+from utils import wrapToPi
 import numpy as np
 
 # if sim is True/using gazebo, therefore want to subscribe to /gazebo/model_states\
@@ -42,13 +42,17 @@ FOOD_ITEMS = 5
 
 # state machine modes, not all implemented
 class Mode(Enum):
+    # moving
     IDLE = 1
     POSE = 2
     STOP = 3
     CROSS = 4
-    NAV = 5
-    MANUAL = 6
-
+    NAV = 5   
+    # food delivery
+    PICKUP = 6
+    DELIVER = 7
+    WAIT_FOR_ORDER = 8
+    EXPLORE = 9
 
 # food indices
 HOT_DOG = 0
@@ -56,7 +60,6 @@ APPLE = 1
 ORANGE = 2
 CAKE = 3
 BANANA = 4
- 
 
 print "supervisor settings:\n"
 print "use_gazebo = %s\n" % use_gazebo
@@ -232,14 +235,14 @@ class Supervisor:
         Arguments:msg from the topic, food item label
         Returns:False if nothing was added, true if added
         '''
+        #get the angle of the frame wrt the world        
+        theta_food = 0.5*wrapToPi(msg.thetaleft-msg.thetaright) + self.theta
+        
+        #find the x, y, of the food using the angle
+        x_food = self.x +msg.distance*np.cos(theta_food) 
+        y_food = self.y +msg.distance*np.sin(theta_food) 
         #check to see if the food was added or we have a better distance
-        if self.food_found[label] is 0 or msg.distance < self.food_data[label,3]:
-            #get the angle of the frame wrt the world        
-            theta_food = 0.5*wrapToPi(msg.thetaleft-msg.thetaright) + self.theta
-            
-            #find the x, y, of the food using the angle
-            x_food = self.x +msg.distance*np.cos(theta_food) 
-            y_food = self.y +msg.distance*np.sin(theta_food) 
+        if self.food_found[label] is 0 or np.abs(theta_food) < self.food_data[label,2]:           
             
             #popluate the array at the correct row
             self.food_data[label] = x_food, y_food, theta_food, msg.distance, msg.confidence

@@ -4,6 +4,7 @@ import rospy
 from nav_msgs.msg import OccupancyGrid, MapMetaData, Path
 from geometry_msgs.msg import Twist, Pose2D, PoseStamped
 from std_msgs.msg import String, Bool
+from sensor_msgs.msg import LaserScan
 import tf
 import numpy as np
 from numpy import linalg
@@ -18,12 +19,16 @@ from enum import Enum
 from dynamic_reconfigure.server import Server
 from asl_turtlebot.cfg import NavigatorConfig
 
+# size of buffer
+CMD_HISTORY_SIZE = 25
+
 # state machine modes, not all implemented
 class Mode(Enum):
     IDLE = 0
     ALIGN = 1
     TRACK = 2
     PARK = 3
+    BACKING_UP = 4
 
 class Navigator:
     """
@@ -42,7 +47,19 @@ class Navigator:
         self.x = 0.0
         self.y = 0.0
         self.theta = 0.0
-
+        
+        # history tracking of controls
+        self.history_cnt = 0
+        self.V_history =  np.zeros(CMD_HISTORY_SIZE)
+        self.om_history = np.zeros(CMD_HISTORY_SIZE)
+        self.backing_cnt = 0
+        
+        
+        #laser scans for collision
+        self.laser_ranges = []
+        self.laser_angle_increment = 0.01 # this gets updated
+        self.chunky_radius = 0.11 #TODO: Tune this!
+        
         # goal state
         self.x_g = None
         self.y_g = None
@@ -70,7 +87,7 @@ class Navigator:
         
         # Robot limits
         self.v_max = rospy.get_param("~v_max", 0.2)  #0.2  # maximum velocity
-        self.om_max =rospy.get_param("~om_max", 0.2)  #0.4   # maximum angular velocity
+        self.om_max =rospy.get_param("~om_max", 0.4)  #0.4   # maximum angular velocity
 
         self.v_des = 0.12   # desired cruising velocity
         self.theta_start_thresh = 0.05   # threshold in theta to start moving forward when path-following
@@ -106,15 +123,21 @@ class Navigator:
         self.trans_listener = tf.TransformListener()
 
         self.cfg_srv = Server(NavigatorConfig, self.dyn_cfg_callback)
-
+        
+        # Subscriber Constructors
         rospy.Subscriber('/map', OccupancyGrid, self.map_callback)
         rospy.Subscriber('/map_metadata', MapMetaData, self.map_md_callback)
         rospy.Subscriber('/cmd_nav', Pose2D, self.cmd_nav_callback)
         rospy.Subscriber('/sm_interface', Bool, self.interface_callback)
+        rospy.Subscriber('/scan', LaserScan, self.laser_callback)
 
         print "finished init"
      
-     
+    #------------------------------------------------------------------
+    # Subscriber Callbacks
+    #------------------------------------------------------------------
+    
+    #for the interface topic between nav and supervisor 
     def interface_callback(self,data):
         rospy.loginfo("Received from interface topic")
         
@@ -144,6 +167,13 @@ class Navigator:
             '''
         return
         
+    # for getting the laser data    
+    def laser_callback(self, msg):
+        """ callback for thr laser rangefinder """
+        
+        self.laser_ranges = msg.ranges
+        self.laser_angle_increment = msg.angle_increment
+            
     def dyn_cfg_callback(self, config, level):
         rospy.loginfo("Reconfigure Request: k1:{k1}, k2:{k2}, k3:{k3}, spline_alpha:{spline_alpha}".format(**config))
         self.pose_controller.k1 = config["k1"]
@@ -157,6 +187,8 @@ class Navigator:
         self.traj_controller.kdy = config["kdy"]
         self.traj_controller.V_max = config["V_max"]
         self.traj_controller.om_max = config["om_max"]
+        
+        self.chunky_radius = config["chunky_radius"]
         return config
 
     def cmd_nav_callback(self, data):
@@ -267,6 +299,30 @@ class Navigator:
         Runs appropriate controller depending on the mode. Assumes all controllers
         are all properly set up / with the correct goals loaded
         """
+        #-------------------------------------
+        #  helper functions for LIFO queue
+        #-------------------------------------
+        
+        def enQ_buffer(V_in, om_in):
+        
+            #rospy.loginfo("Enqueuing controls")
+            # roll right 1 [n]->[n+1]
+            self.V_history = np.roll(self.V_history, 1, axis=None)
+            self.om_history = np.roll(self.om_history, 1, axis=None)
+            # load in the value
+            self.V_history[0] = V_in
+            self.om_history[0] = om_in
+                    
+        def deQ_buffer():
+            #rospy.loginfo("Dequeuing controls")
+            # get first value out
+            V_out = -1.0*self.V_history[0] 
+            om_out = -1.0*self.om_history[0]
+            # roll left 1 [n]<-[n+1]
+            self.V_history = np.roll(self.V_history, -1, axis=None)
+            self.om_history = np.roll(self.om_history, -1, axis=None)
+            return V_out, om_out
+            
         t = self.get_current_plan_time()
 
         if self.mode == Mode.PARK:
@@ -275,10 +331,17 @@ class Navigator:
             V, om = self.traj_controller.compute_control(self.x, self.y, self.theta, t)
         elif self.mode == Mode.ALIGN:
             V, om = self.heading_controller.compute_control(self.x, self.y, self.theta, t)
+        elif self.mode == Mode.BACKING_UP:
+            V, om = deQ_buffer()
         else:
             V = 0.
             om = 0.
         
+        #enqueue for history tracking
+        if self.mode is not Mode.BACKING_UP:
+            enQ_buffer(V, om)
+            
+            
         cmd_vel = Twist()
         cmd_vel.linear.x = V
         cmd_vel.angular.z = om
@@ -322,7 +385,6 @@ class Navigator:
         rospy.loginfo("Planning Succeeded")
 
         planned_path = problem.path
-        
 
         # Check whether path is too short
         if len(planned_path) < 4:
@@ -385,6 +447,36 @@ class Navigator:
                 self.switch_mode(Mode.IDLE)
                 print e
                 pass
+            
+            """    
+            def if_about_to_hit_wall():
+                
+                # check if inflated turtlebot circumference will hit the wall
+                #th_offset = np.pi/8.0
+                #arr = np.arange(wrapToPi(self.theta-th_offset), wrapToPi(self.theta+th_offset), 0.02)
+                arr = np.arange(0, 2*np.pi, 0.02)
+                for i in range(len(arr)):
+                    if not self.occupancy.is_free(np.array([self.x + np.cos(arr[i])*self.chunky_radius,self.y+np.sin(arr[i])*self.chunky_radius])):
+                        return True
+                return False  
+                
+                #return not self.occupancy.is_free(np.array([self.x ,self.y]))
+            """ 
+            def if_about_to_hit_wall(laserRanges):
+                #initialize return value to false
+                returnFlag = False
+                #remove the zeros
+                #validRanges = [i for i, dist in enumerate(laserRanges) if dist != 0]
+                #check the minimum scan distance
+                #rospy.loginfo(laserRanges)
+                minScanDist = min(laserRanges)
+                rospy.loginfo("Minimum Scan Distance: %f", minScanDist)
+                #see if less that our boy's fat body
+                if minScanDist < self.chunky_radius:
+                    #set flag to true
+                    returnFlag = True 
+                #return the flag                 
+                return returnFlag
 
             # STATE MACHINE LOGIC
             # some transitions handled by callbacks
@@ -395,7 +487,10 @@ class Navigator:
                     self.current_plan_start_time = rospy.get_rostime()
                     self.switch_mode(Mode.TRACK)
             elif self.mode == Mode.TRACK:
-                if self.near_goal():
+                if if_about_to_hit_wall(self.laser_ranges):
+                    rospy.loginfo("About to hit a wall")
+                    self.switch_mode(Mode.BACKING_UP)
+                elif self.near_goal():
                     self.switch_mode(Mode.PARK)
                 elif not self.close_to_plan_start():
                     rospy.loginfo("replanning because far from start")
@@ -404,17 +499,35 @@ class Navigator:
                     rospy.loginfo("replanning because out of time")
                     self.replan() # we aren't near the goal but we thought we should have been, so replan
             elif self.mode == Mode.PARK:
+                #if if_about_to_hit_wall():
+                 #   self.switch_mode(Mode.BACKING_UP)
                 if self.at_goal():
                     # forget about goal:
                     self.x_g = None
                     self.y_g = None
                     self.theta_g = None
                     self.switch_mode(Mode.IDLE)
-
+            
+            elif self.mode == Mode.BACKING_UP:
+                # see if we have backed enough counts
+                if (self.backing_cnt > CMD_HISTORY_SIZE):# or if_about_to_hit_wall(self.laser_ranges):
+                    # NUKE EVERYTHING!!!!!!!!!
+                    self.history_cnt = 0
+                    self.V_history =  np.zeros(CMD_HISTORY_SIZE)
+                    self.om_history = np.zeros(CMD_HISTORY_SIZE)
+                    self.backing_cnt = 0
+                    self.replan()
+                    self.switch_mode(Mode.TRACK)
+                else:
+                    # increment count
+                    self.backing_cnt += 1
+            
+            
             self.publish_control()
             rate.sleep()
 
 if __name__ == '__main__':    
     nav = Navigator()
     rospy.on_shutdown(nav.shutdown_callback)
+
     nav.run()

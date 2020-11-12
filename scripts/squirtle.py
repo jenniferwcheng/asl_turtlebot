@@ -66,7 +66,7 @@ class Squirtle:
     #    Subscriber callbacks
     # ---------------------------
     
-    def post_callback(self,msg):
+    def post_callback(self,msg): # TODO: add publisher for done_exploring in navigator/request_pub?
         rospy.loginfo("[SQUIRTLE]: Received msg: %s", msg.data)
         # check message string
         if msg.data == "at_goal":
@@ -133,7 +133,7 @@ class Squirtle:
         # check the timer is running
         if self.wait_time is not None:
             # see if the timer is expired
-            if (rospy.get_rostime()-self.start_time) > rospy.Duration.from_sec(WAIT_TIME):
+            if (rospy.get_rostime()-self.start_time) > rospy.Duration.from_sec(self.wait_time):
                 self.wait_time = None
                 returnVal = True
         
@@ -162,18 +162,14 @@ class Squirtle:
         # checks wich mode it is in and acts accordingly
         if self.mode == Mode.EXPLORE:
             pass
-            '''
-            # do not take order requests
-            if self.explore_done: # TODO: write publisher that sets this to true
-                self.switch_mode(Mode.WAIT_FOR_ORDER) 
-            '''    
+             
         elif self.mode == Mode.WAIT_FOR_ORDER:
             # This is handled in delivery_callback
             pass
             
         elif self.mode == Mode.NAV_2_PICKUP:
             # check if at goal
-            if self.is_at_goal: # TODO: write subscriber that sets self.is_at_goal
+            if self.is_at_goal:
                 # start pickup timer
                 self.start_timer(WAIT_TIME)
                 # switch mode
@@ -212,20 +208,9 @@ class Squirtle:
         rate = rospy.Rate(10) # 10 Hz
         while not rospy.is_shutdown():
             self.loop()
-            #time.sleep(0.1)
             rate.sleep()
 
 
 if __name__ == '__main__':
     squirtle = Squirtle()
     squirtle.run()
-'''
-if __name__ == '__main__':
-    rospy.init_node("rospy_rate_test")
-    rate = rospy.Rate(10) # ROS Rate at 5Hz
-    
-    while not rospy.is_shutdown():
-        rospy.loginfo("Hello")
-        #rate.sleep()
-        time.sleep(0.2)
-        '''

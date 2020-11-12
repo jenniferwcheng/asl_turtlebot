@@ -63,7 +63,7 @@ print "mapping = %s\n" % mapping
 class Supervisor:
 
     def __init__(self):
-        rospy.init_node('turtlebot_supervisor_nav', anonymous=True)
+        rospy.init_node('turtlebot_supervisor', anonymous=True)
         # initialize variables
         self.x = 0
         self.y = 0
@@ -138,7 +138,7 @@ class Supervisor:
     # ---------------------------------------------
     # reads the item string and sets up the goal for it.        
     def post_callback(self, msg):
-        
+        rospy.loginfo("[SUPERVISOR]: Post rxed: %s", msg.data)
         idx = None
         isSquirtle = False
         if msg.data == "hot_dog":
@@ -151,11 +151,14 @@ class Supervisor:
             idx = 3
         elif msg.data == "banana":
             idx = 4
+        elif msg.data == "squirtle":
+            pass
         else:
             raise Exception('This item is not supported: %s'
                 % msg.data)
         
         if msg.data == "squirtle":
+            rospy.loginfo("Setting goal to delivery")
             self.x_g = self.squirtle_x 
             self.y_g = self.squirtle_y
             self.theta_g = self.squirtle_th
@@ -166,7 +169,7 @@ class Supervisor:
             self.theta_g =  self.food_data[idx][2]
         
         #now publish to cmd nav
-        self.nav_to_pose
+        self.nav_to_pose()
         
     def gazebo_callback(self, msg):
         pose = msg.pose[msg.name.index("turtlebot3_burger")]

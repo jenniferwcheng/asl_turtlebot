@@ -115,6 +115,7 @@ class Navigator:
         self.pose_controller = PoseController(0., 0., 0., self.v_max, self.om_max)
         self.heading_controller = HeadingController(self.kp_th, self.om_max)
 
+        # Publishers
         self.nav_planned_path_pub = rospy.Publisher('/planned_path', Path, queue_size=10)
         self.nav_smoothed_path_pub = rospy.Publisher('/cmd_smoothed_path', Path, queue_size=10)
         self.nav_smoothed_path_rej_pub = rospy.Publisher('/cmd_smoothed_path_rejected', Path, queue_size=10)
@@ -123,7 +124,6 @@ class Navigator:
         self.trans_listener = tf.TransformListener()
 
         self.cfg_srv = Server(NavigatorConfig, self.dyn_cfg_callback)
-        # Publishers
         self.publish_squirtle = rospy.Publisher('/post/squirtle_fsm', String, queue_size = 10)
          
         # Subscriber Constructors

@@ -64,14 +64,3 @@ class DeliveryRequestPublisher:
 if __name__ == '__main__':
     may_i_take_your_order = DeliveryRequestPublisher()
     may_i_take_your_order.run()
-
-'''    
-if __name__ == '__main__':
-    rospy.init_node("rospy_rate_test")
-    rate = rospy.Rate(5) # ROS Rate at 5Hz
-    
-    while not rospy.is_shutdown():
-        rospy.loginfo("Poop")
-        #rate.sleep()
-        time.sleep(0.1)
-        '''

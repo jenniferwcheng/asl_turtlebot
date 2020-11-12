@@ -11,7 +11,10 @@
         <arg name="debug" value="false"/>
         <arg name="gui" value="$(arg gui)"/>
     </include>
+    
     <!--<node name="gazebo" pkg="gazebo" type="gazebo" args="$(find gazebo_ros)/launch/empty_world.launch" respawn="false" output="screen"/>-->
     <node pkg="asl_turtlebot" name="squirtleFSM" type="squirtle.py" output="screen"/>
+    <node pkg="asl_turtlebot" name="turtlebot_supervisor" type="supervisor_nav.py" output="screen"/>
+    
     <!--<node pkg="asl_turtlebot" name="delivery" type="request_publisher.py" output="screen"/>-->
 </launch>

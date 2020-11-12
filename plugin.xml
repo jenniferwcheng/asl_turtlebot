@@ -1,0 +1,21 @@
+<library path="lib/libasl_turtlebot">
+  
+  <class name="SquirtleBotCommander" type="SquirtleBotCommander" base_class_type="rqt_gui_cpp::Plugin">
+    <description>
+      Delete this later
+    </description>
+    <qtgui>
+      <group>
+        <label>Robot Tools</label>
+        <icon type="theme">folder</icon>
+        <statustip>Plugins related to robot tools</statustip>
+      </group>
+      <label>[irg] SquirtleBotCommander</label>
+      <icon type="theme">camera-photo</icon>
+      <statustip>Delete this</statustip>
+    </qtgui>
+  </class>
+  
+</library>
+
+

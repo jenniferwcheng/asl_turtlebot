@@ -91,4 +91,10 @@
   
   
   <node pkg="asl_turtlebot" name="squirtleFSM" type="squirtle.py" output="screen"/>
+  
+  <!-- RQT and plugin -->
+  <node pkg="rqt_gui"
+        type="rqt_gui"
+        name="rqt_gui"
+        args="--perspective-file $(find asl_turtlebot)/cfg/squirtlebot.perspective"/>
 </launch>

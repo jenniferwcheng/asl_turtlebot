@@ -124,13 +124,14 @@ class Navigator:
         self.trans_listener = tf.TransformListener()
 
         self.cfg_srv = Server(NavigatorConfig, self.dyn_cfg_callback)
+        #communication with squirtle_fsm to inform goal status
         self.publish_squirtle = rospy.Publisher('/post/squirtle_fsm', String, queue_size = 10)
          
         # Subscriber Constructors
-        rospy.Subscriber('/map', OccupancyGrid, self.map_callback)
+        rospy.Subscriber('/post/nav_fsm', Bool, self.post_callback) #service queue
+        rospy.Subscriber('/map', OccupancyGrid, self.map_callback) 
         rospy.Subscriber('/map_metadata', MapMetaData, self.map_md_callback)
         rospy.Subscriber('/cmd_nav', Pose2D, self.cmd_nav_callback)
-        rospy.Subscriber('/post/nav_fsm', Bool, self.interface_callback)
         rospy.Subscriber('/scan', LaserScan, self.laser_callback)
 
         print "finished init"
@@ -140,12 +141,12 @@ class Navigator:
     #------------------------------------------------------------------
     
     #for the interface topic between nav and supervisor 
-    def interface_callback(self,data):
+    def post_callback(self,data):
         rospy.loginfo("Received from interface topic")
         
         # received true = stop
         if data.data is True:   
-            self.mode_at_stop = self.mode # save current mode
+            #self.mode_at_stop = self.mode # save current mode
             
             # store current goal
             self.x_saved = self.x_g
@@ -531,8 +532,8 @@ class Navigator:
                     self.V_history =  np.zeros(CMD_HISTORY_SIZE)
                     self.om_history = np.zeros(CMD_HISTORY_SIZE)
                     self.backing_cnt = 0
-                    self.replan()
-                    self.switch_mode(Mode.TRACK)
+                    self.replan() #switches mode internally
+                    #self.switch_mode(Mode.TRACK)
                 else:
                     # increment count
                     self.backing_cnt += 1

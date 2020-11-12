@@ -9,8 +9,12 @@ find_package(catkin REQUIRED COMPONENTS
   rospy
   std_msgs
   message_generation
-	dynamic_reconfigure
+  dynamic_reconfigure
+  rqt_gui
+  rqt_gui_cpp
 )
+
+find_package(Qt5Widgets)
 
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
@@ -101,9 +105,9 @@ generate_dynamic_reconfigure_options(
 ## CATKIN_DEPENDS: catkin_packages dependent projects also need
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
-#  INCLUDE_DIRS include
-#  LIBRARIES asl_turtlebot
-#  CATKIN_DEPENDS roscpp rospy std_msgs
+  INCLUDE_DIRS rqt_plugin
+  LIBRARIES asl_turtlebot
+  CATKIN_DEPENDS roscpp rospy std_msgs rqt_gui_cpp
 #  DEPENDS system_lib
 )
 
@@ -188,4 +192,6 @@ include_directories(
 
 ## Add folders to be run by python nosetests
 # catkin_add_nosetests(test)
+
+add_subdirectory(rqt_plugin)
 

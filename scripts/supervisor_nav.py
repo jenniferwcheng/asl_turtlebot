@@ -107,6 +107,7 @@ class Supervisor:
         # ------------------------
         # service post topic
         rospy.Subscriber('/post/supervisor_fsm', String, self.post_callback)
+        
         # stop sign detector
         rospy.Subscriber('/detector/stop_sign', DetectedObject, self.stop_sign_detected_callback)
         # hot dog detector

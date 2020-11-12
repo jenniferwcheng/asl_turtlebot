@@ -1,0 +1,62 @@
+{
+  "keys": {},
+  "groups": {
+    "pluginmanager": {
+      "keys": {
+        "running-plugins": {
+          "type": "repr",
+          "repr": "{u'SquirtleBotCommander': [1]}"
+        }
+      },
+      "groups": {
+        "plugin__SquirtleBotCommander__1": {
+          "keys": {},
+          "groups": {
+            "dock_widget__SquirtleBotCommanderPanel": {
+              "keys": {
+                "dockable": {
+                  "type": "repr",
+                  "repr": "True"
+                },
+                "parent": {
+                  "type": "repr",
+                  "repr": "None"
+                },
+                "dock_widget_title": {
+                  "type": "repr",
+                  "repr": "u'Squirtle Bot Commander'"
+                }
+              },
+              "groups": {}
+            }
+          }
+        }
+      }
+    },
+    "mainwindow": {
+      "keys": {
+        "geometry": {
+          "type": "repr(QByteArray.hex)",
+          "repr(QByteArray.hex)": "QtCore.QByteArray('01d9d0cb000200000000006400000064000002bd0000023c0000006500000076000002bc0000023700000000000000000640')",
+          "pretty-print": "     d d   < e v   7    @"
+        },
+        "state": {
+          "type": "repr(QByteArray.hex)",
+          "repr(QByteArray.hex)": "QtCore.QByteArray('000000ff00000000fd00000001000000030000025800000193fc0100000001fb00000064005300710075006900720074006c00650042006f00740043006f006d006d0061006e006400650072005f005f0031005f005f005300710075006900720074006c00650042006f00740043006f006d006d0061006e00640065007200500061006e0065006c0100000000000002580000011a00ffffff000002580000000000000004000000040000000800000008fc00000001000000030000000100000036004d0069006e0069006d0069007a006500640044006f0063006b00570069006400670065007400730054006f006f006c0062006100720000000000ffffffff0000000000000000')",
+          "pretty-print": "                 dSquirtleBotCommander__1__SquirtleBotCommanderPanel                            6MinimizedDockWidgetsToolbar        "
+        }
+      },
+      "groups": {
+        "toolbar_areas": {
+          "keys": {
+            "MinimizedDockWidgetsToolbar": {
+              "type": "repr",
+              "repr": "8"
+            }
+          },
+          "groups": {}
+        }
+      }
+    }
+  }
+}

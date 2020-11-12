@@ -123,12 +123,14 @@ class Navigator:
         self.trans_listener = tf.TransformListener()
 
         self.cfg_srv = Server(NavigatorConfig, self.dyn_cfg_callback)
-        
+        # Publishers
+        self.publish_squirtle = rospy.Publisher('/post/squirtle_fsm', String, queue_size = 10)
+         
         # Subscriber Constructors
         rospy.Subscriber('/map', OccupancyGrid, self.map_callback)
         rospy.Subscriber('/map_metadata', MapMetaData, self.map_md_callback)
         rospy.Subscriber('/cmd_nav', Pose2D, self.cmd_nav_callback)
-        rospy.Subscriber('/sm_interface', Bool, self.interface_callback)
+        rospy.Subscriber('/post/nav_fsm', Bool, self.interface_callback)
         rospy.Subscriber('/scan', LaserScan, self.laser_callback)
 
         print "finished init"
@@ -200,6 +202,11 @@ class Navigator:
             self.y_g = data.y
             self.theta_g = data.theta
             self.replan()
+            
+            #tell squirtle we are no longer at the goal
+            msg = String()
+            msg.data = "not_at_goal"
+            self.publish_squirtle.publish(msg)
 
     def map_md_callback(self, msg):
         """
@@ -267,7 +274,9 @@ class Navigator:
     def switch_mode(self, new_mode):
         rospy.loginfo("Switching from %s -> %s", self.mode, new_mode)
         self.mode = new_mode
-
+    #------------------------------------------------------------------
+    # Publishers
+    #------------------------------------------------------------------
     def publish_planned_path(self, path, publisher):
         # publish planned plan for visualization
         path_msg = Path()
@@ -470,7 +479,8 @@ class Navigator:
                 #check the minimum scan distance
                 #rospy.loginfo(laserRanges)
                 minScanDist = min(laserRanges)
-                rospy.loginfo("Minimum Scan Distance: %f", minScanDist)
+                #rospy.loginfo("Minimum Scan Distance: %f", minScanDist)
+                
                 #see if less that our boy's fat body
                 if minScanDist < self.chunky_radius:
                     #set flag to true
@@ -507,6 +517,11 @@ class Navigator:
                     self.y_g = None
                     self.theta_g = None
                     self.switch_mode(Mode.IDLE)
+                    
+                    #tell squirtle we are at the goal
+                    msg = String()
+                    msg.data = "at_goal"
+                    self.publish_squirtle.publish(msg)
             
             elif self.mode == Mode.BACKING_UP:
                 # see if we have backed enough counts

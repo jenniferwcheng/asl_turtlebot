@@ -89,6 +89,10 @@
   </node>
   <node pkg="asl_turtlebot" name="turtlebot_supervisor" type="supervisor_nav.py" output="screen"/>
   
+  
+  <!--<node pkg="asl_turtlebot" name="squirtleFSM" type="squirtle.py" output="screen"/>-->
+  
+  
   <!-- TRASH -->
   <!--<node pkg="asl_turtlebot" name="turtlebot_detector_viz" type="detector_viz.py"  output="screen"/>-->
   <!--<node pkg="asl_turtlebot" name="turtlebot_detector" type="detector_mobilenet.py" output="screen"/>-->

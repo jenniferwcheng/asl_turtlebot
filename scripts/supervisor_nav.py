@@ -48,11 +48,6 @@ class Mode(Enum):
     STOP = 3
     CROSS = 4
     NAV = 5   
-    # food delivery
-    PICKUP = 6
-    DELIVER = 7
-    WAIT_FOR_ORDER = 8
-    EXPLORE = 9
 
 # food indices
 HOT_DOG = 0
@@ -73,6 +68,7 @@ class Supervisor:
         self.x = 0
         self.y = 0
         self.theta = 0
+        
         self.mode = Mode.IDLE
         self.last_mode_printed = None
         self.trans_listener = tf.TransformListener()
@@ -80,6 +76,16 @@ class Supervisor:
         #list of the food and it's location
         self.food_data = np.zeros((FOOD_ITEMS, 5))
         self.food_found = [0, 0, 0, 0, 0]
+        
+        # delivery location
+        self.squirtle_x = 3.15 # TODO: set squirtle location
+        self.squirtle_y = 1.6
+        self.squirtle_th = 0.0
+        
+        # home location
+        self.home_x = 3.15
+        self.home_y = 1.6
+        self.home_th = 0.0
         
         # ------------------------
         #       publishers
@@ -92,14 +98,15 @@ class Supervisor:
         # command vel (used for idling)
         self.cmd_vel_publisher = rospy.Publisher('/cmd_vel', Twist, queue_size=10)
         # state machine interface
-        self.sm_interface_publisher = rospy.Publisher('/sm_interface', Bool, queue_size =10)
+        self.sm_interface_publisher = rospy.Publisher('/post/nav_fsm', Bool, queue_size =10)
         # for publishing foor markers
         self.vis_pub = rospy.Publisher('marker_topic', Marker, queue_size=10)
         
         # ------------------------
         #       subscribers
         # ------------------------
-        
+        # service post topic
+        rospy.Subscriber('/post/supervisor_fsm', String, self.post_callback)
         # stop sign detector
         rospy.Subscriber('/detector/stop_sign', DetectedObject, self.stop_sign_detected_callback)
         # hot dog detector
@@ -129,7 +136,38 @@ class Supervisor:
     # ---------------------------------------------
     #       General Subscriber Callbacks
     # ---------------------------------------------
-           
+    # reads the item string and sets up the goal for it.        
+    def post_callback(self, msg):
+        
+        idx = None
+        isSquirtle = False
+        if msg.data == "hot_dog":
+            idx = 0
+        elif msg.data == "apple":
+            idx = 1
+        elif msg.data == "orange":
+            idx = 2
+        elif msg.data == "cake":
+            idx = 3
+        elif msg.data == "banana":
+            idx = 4
+        else:
+            raise Exception('This item is not supported: %s'
+                % msg.data)
+        
+        if msg.data == "squirtle":
+            self.x_g = self.squirtle_x 
+            self.y_g = self.squirtle_y
+            self.theta_g = self.squirtle_th
+        else:
+            #populate the goal state based on where we think the food is:
+            self.x_g = self.food_data[idx][0]
+            self.y_g = self.food_data[idx][1]
+            self.theta_g =  self.food_data[idx][2]
+        
+        #now publish to cmd nav
+        self.nav_to_pose
+        
     def gazebo_callback(self, msg):
         pose = msg.pose[msg.name.index("turtlebot3_burger")]
         twist = msg.twist[msg.name.index("turtlebot3_burger")]
@@ -310,7 +348,7 @@ class Supervisor:
             marker.color.b = 0.0
         
         self.vis_pub.publish(marker)
-        print('Published marker!')
+        rospy.loginfo('Published marker!')
             
     def broadcast_tf(self,x,y,th):
         tf2_ros.StaticTransformBroadcaster().sendTransform((x,y,0.0),
@@ -460,3 +498,4 @@ class Supervisor:
 if __name__ == '__main__':
     sup = Supervisor()
     sup.run()
+    

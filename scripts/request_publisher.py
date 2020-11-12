@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import rospy
+import time
 from std_msgs.msg import String
 
 class DeliveryRequestPublisher:
@@ -13,6 +14,7 @@ class DeliveryRequestPublisher:
         self.delivery_request = None
         #create publisher
         self.request_publisher = rospy.Publisher('/delivery_request', String, queue_size=10)
+        self.squirtle_publisher = rospy.Publisher('/post/squirtle_fsm', String, queue_size=10)
 
     def publish_request(self):
         #publish the request t times, once every s seconds
@@ -62,3 +64,14 @@ class DeliveryRequestPublisher:
 if __name__ == '__main__':
     may_i_take_your_order = DeliveryRequestPublisher()
     may_i_take_your_order.run()
+
+'''    
+if __name__ == '__main__':
+    rospy.init_node("rospy_rate_test")
+    rate = rospy.Rate(5) # ROS Rate at 5Hz
+    
+    while not rospy.is_shutdown():
+        rospy.loginfo("Poop")
+        #rate.sleep()
+        time.sleep(0.1)
+        '''

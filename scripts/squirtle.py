@@ -35,7 +35,7 @@ class Squirtle:
         # ------------------------
     
         # state machine variables
-        self.mode = Mode.WAIT_FOR_ORDER
+        self.mode = Mode.EXPLORE
         self.last_mode_printed = None
         # flags
         self.is_at_goal = False
@@ -87,7 +87,7 @@ class Squirtle:
                 return
             else:
                 # split order into separate strings, comma delimited ["a,b,c"] -> ["a","b","c"]    
-                self.order_items = msg.data.split(',')
+                self.order_items = msg.data.strip().split(',')
                 rospy.loginfo("List: %s", str(self.order_items))
                 self.num_items = len(self.order_items)
                 rospy.loginfo("Number of items to pickup: %s", str(self.num_items))
@@ -109,8 +109,10 @@ class Squirtle:
             rospy.loginfo("More items to get")
             # decrement list count
             self.num_items -= 1
+            # clear the goal status flag
+            self.is_at_goal = False
             # tell supervisor which order to pick up
-            self.supervisor_fsm_pub.publish(self.order_items[self.num_items])
+            self.supervisor_fsm_pub.publish(self.order_items[self.num_items].strip())
             # switch to picking up state
             self.switch_mode(Mode.NAV_2_PICKUP)
             # return false to indicate list not empty
@@ -142,6 +144,8 @@ class Squirtle:
     def deliver_order(self):
         # tell supervisor to go to squirtle
         self.supervisor_fsm_pub.publish("squirtle")
+        # clear the goal status flag
+        self.is_at_goal = False
         # switch to navigating to delivery location
         self.switch_mode(Mode.NAV_2_DELIV)
         

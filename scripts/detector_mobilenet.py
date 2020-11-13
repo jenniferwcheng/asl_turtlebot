@@ -212,7 +212,7 @@ class Detector:
 
         # runs object detection in the image
         (boxes, scores, classes, num) = self.run_detection(img)
-        rospy.loginfo(num)
+        #rospy.loginfo(num)
 
         if num > 0:
             # create list of detected objects
@@ -245,7 +245,7 @@ class Detector:
                 dist = self.estimate_distance(thetaleft,thetaright,img_laser_ranges)
 
                 if not self.object_publishers.has_key(cl):
-                    rospy.loginfo(self.object_labels[cl])
+                    #rospy.loginfo(self.object_labels[cl])
                     self.object_publishers[cl] = rospy.Publisher('/detector/'+self.object_labels[cl],
                         DetectedObject, queue_size=10)
 

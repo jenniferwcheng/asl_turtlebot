@@ -78,7 +78,7 @@
 
   <!-- NAVIGATING MANUALLY -->
   <!--<node pkg="asl_turtlebot" name="nav" type="navigator_smach.py" output="screen"/>-->
-  <node pkg="asl_turtlebot" name="nav" type="navigator.py" output="screen"/>
+  <!--<node pkg="asl_turtlebot" name="nav" type="navigator.py" output="screen"/>-->
   <node name="rviz" pkg="rviz" type="rviz" args="-d $(find asl_turtlebot)/rviz/project_sim.rviz"/>
   <!--<node type="rviz" name="rviz" pkg="rviz" args="-d $(find section5)/rviz/my_nav.rviz" />-->
   <node pkg="section5" type="marker_pub.py" name="marker_node"/>
@@ -87,10 +87,10 @@
   <node pkg="asl_turtlebot" name="detector" type="detector_mobilenet.py" output="screen">
     <param name="min_score" value="0.5"/>
   </node>
-  <node pkg="asl_turtlebot" name="turtlebot_supervisor" type="supervisor_nav.py" output="screen"/>
+  <!--<node pkg="asl_turtlebot" name="turtlebot_supervisor" type="supervisor_nav.py" output="screen"/>-->
   
   
-  <node pkg="asl_turtlebot" name="squirtleFSM" type="squirtle.py" output="screen"/>
+  <!--<node pkg="asl_turtlebot" name="squirtleFSM" type="squirtle.py" output="screen"/>-->
   
   <!-- RQT and plugin -->
   <node pkg="rqt_gui"

@@ -205,9 +205,9 @@ class Navigator:
             self.replan()
             
             #tell squirtle we are no longer at the goal
-            msg = String()
-            msg.data = "not_at_goal"
-            self.publish_squirtle.publish(msg)
+            #msg = String()
+            #msg.data = "not_at_goal"
+            #self.publish_squirtle.publish(msg)
 
     def map_md_callback(self, msg):
         """
@@ -235,6 +235,7 @@ class Navigator:
             if self.x_g is not None:
                 # if we have a goal to plan to, replan
                 rospy.loginfo("replanning because of new map")
+                self.replan() # new map, need to replan
 
     def shutdown_callback(self):
         """
@@ -397,7 +398,11 @@ class Navigator:
         planned_path = problem.path
 
         # Check whether path is too short
-        if len(planned_path) < 4:
+        if self.at_goal():
+            rospy.loginfo("Path already at goal pose")
+            self.switch_mode(Mode.IDLE)
+            return
+        elif len(planned_path) < 4:
             rospy.loginfo("Path too short to track")
             self.switch_mode(Mode.PARK)
             return

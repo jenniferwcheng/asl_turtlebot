@@ -848,7 +848,7 @@
         <kinematic>0</kinematic>
         <gravity>1</gravity>
       </link>
-      <pose frame=''>2.149577 2.1055752 0.0 0.0 0.0 0.0</pose>
+      <pose frame=''>2.071689 2.073017 0.0 0.0 0.0 0.0</pose>
     </model>-->
     
     <!--<model name='Banana'>
@@ -957,7 +957,7 @@
       </model>
       
       <model name='apple_box'>
-        <pose frame=''>3.6572 1.551728 0.24907 1.57079632679 0.0 -1.57079632679</pose>
+        <pose frame=''>2.783312 0.02 0.2017 1.57079632679 0.0 0.0</pose>
           <link name='link_1'>
               <visual name='visual'>
                 <geometry>
@@ -1007,7 +1007,7 @@
       </model>
       
       <model name='squirtle_box'>
-        <pose frame=''>2.783312 0.02 0.2017 1.57079632679 0.0 0.0</pose>
+        <pose frame=''>3.15 1.6 0 0.0 0.0 0.0</pose>
           <link name='link_1'>
               <visual name='visual'>
                 <geometry>

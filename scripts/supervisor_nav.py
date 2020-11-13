@@ -87,6 +87,8 @@ class Supervisor:
         self.home_y = 1.6
         self.home_th = 0.0
         
+        self.chunky_radius = 0.11 #TODO: Tune this!
+        
         # ------------------------
         #       publishers
         # ------------------------
@@ -140,9 +142,9 @@ class Supervisor:
     # reads the item string and sets up the goal for it.        
     def post_callback(self, msg):
         rospy.loginfo("[SUPERVISOR]: Post rxed: %s", msg.data)
-        idx = None
+        idx = -1
         isSquirtle = False
-        if msg.data == "hot_dog":
+        if msg.data == "hotdog":
             idx = 0
         elif msg.data == "apple":
             idx = 1
@@ -157,7 +159,8 @@ class Supervisor:
         else:
             raise Exception('This item is not supported: %s'
                 % msg.data)
-        
+        rospy.loginfo("The index is: %d", idx)
+         
         if msg.data == "squirtle":
             rospy.loginfo("Setting goal to delivery")
             self.x_g = self.squirtle_x 
@@ -171,6 +174,7 @@ class Supervisor:
         
         #now publish to cmd nav
         self.nav_to_pose()
+        self.mode = Mode.NAV
         
     def gazebo_callback(self, msg):
         pose = msg.pose[msg.name.index("turtlebot3_burger")]
@@ -229,43 +233,43 @@ class Supervisor:
             
     def hot_dog_detected_callback(self, msg):
     
-        rospy.loginfo("Found hot diggity dog")
+        #rospy.loginfo("Found hot diggity dog")
         if self.add_food_to_list(msg,HOT_DOG):
             rospy.loginfo("Succesfully added the hot dog")
-        else:
-            rospy.loginfo("Did not add hot dog")
+        #else:
+            #rospy.loginfo("Did not add hot dog")
             
     def apple_detected_callback(self, msg):
     
-        rospy.loginfo("Found apple")
+        #rospy.loginfo("Found apple")
         if self.add_food_to_list(msg,APPLE):
             rospy.loginfo("Succesfully added the apple")
-        else:
-            rospy.loginfo("Did not add apple")
+        #else:
+            #rospy.loginfo("Did not add apple")
             
     def orange_detected_callback(self, msg):
     
-        rospy.loginfo("Found orange")
+        #rospy.loginfo("Found orange")
         if self.add_food_to_list(msg,ORANGE):
             rospy.loginfo("Succesfully added the orange")
-        else:
-            rospy.loginfo("Did not add orange")
+        #else:
+            #rospy.loginfo("Did not add orange")
             
     def cake_detected_callback(self, msg):
     
-        rospy.loginfo("Found cake")
+        #rospy.loginfo("Found cake")
         if self.add_food_to_list(msg,CAKE):
             rospy.loginfo("Succesfully added the cake")
-        else:
-            rospy.loginfo("Did not add cake")
+        #else:
+            #rospy.loginfo("Did not add cake")
             
     def banana_detected_callback(self, msg):
     
-        rospy.loginfo("Found banana")
+        #rospy.loginfo("Found banana")
         if self.add_food_to_list(msg,BANANA):
             rospy.loginfo("Succesfully added the banana")
-        else:
-            rospy.loginfo("Did not add banana")
+        #else:
+            #rospy.loginfo("Did not add banana")
             
     # ---------------------------------------------
     #             Helper Functions
@@ -281,10 +285,10 @@ class Supervisor:
         theta_food = 0.5*wrapToPi(msg.thetaleft-msg.thetaright) + self.theta
         
         #find the x, y, of the food using the angle
-        x_food = self.x +msg.distance*np.cos(theta_food) 
-        y_food = self.y +msg.distance*np.sin(theta_food) 
+        x_food = self.x #+(msg.distance - self.chunky_radius)*np.cos(theta_food) 
+        y_food = self.y #+(msg.distance - self.chunky_radius)*np.sin(theta_food) 
         #check to see if the food was added or we have a better distance
-        if self.food_found[label] is 0 or np.abs(theta_food) < self.food_data[label,2]:           
+        if self.food_found[label] is 0 or msg.distance < self.food_data[label,3]:#np.abs(theta_food) < self.food_data[label,2]:           
             
             #popluate the array at the correct row
             self.food_data[label] = x_food, y_food, theta_food, msg.distance, msg.confidence
@@ -372,13 +376,13 @@ class Supervisor:
         self.pose_goal_publisher.publish(pose_g_msg)
 
     def nav_to_pose(self):
-        """ sends the current desired pose to the naviagtor """
+        """ sends the current desired pose to the navigator """
 
         nav_g_msg = Pose2D()
         nav_g_msg.x = self.x_g
         nav_g_msg.y = self.y_g
         nav_g_msg.theta = self.theta_g
-
+        #rospy.loginfo("[SUPERVISOR]: publishing to cmd_nav")
         self.nav_goal_publisher.publish(nav_g_msg)
 
     def stay_idle(self):

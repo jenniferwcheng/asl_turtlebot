@@ -58,7 +58,7 @@ class Navigator:
         #laser scans for collision
         self.laser_ranges = []
         self.laser_angle_increment = 0.01 # this gets updated
-        self.chunky_radius = 0.11 #TODO: Tune this!
+        self.chunky_radius = 0.1 #TODO: Tune this!
         
         # goal state
         self.x_g = None
@@ -66,6 +66,8 @@ class Navigator:
         self.theta_g = None
 
         self.th_init = 0.0
+        
+        self.iters = 0
 
         # map parameters
         self.map_width = 0
@@ -96,7 +98,7 @@ class Navigator:
         # threshold at which navigator switches from trajectory to pose control
         self.near_thresh = 0.2
         self.at_thresh = 0.02
-        self.at_thresh_theta = 0.05
+        self.at_thresh_theta = (2.0*np.pi)/20.0 #0.05
 
         # trajectory smoothing
         self.spline_alpha = 0.01
@@ -133,21 +135,31 @@ class Navigator:
         rospy.Subscriber('/map_metadata', MapMetaData, self.map_md_callback)
         rospy.Subscriber('/cmd_nav', Pose2D, self.cmd_nav_callback)
         rospy.Subscriber('/scan', LaserScan, self.laser_callback)
+        rospy.Subscriber('debug/nav_fsm', String, self.debug_callback)
 
         print "finished init"
      
     #------------------------------------------------------------------
     # Subscriber Callbacks
     #------------------------------------------------------------------
-    
+    #for in terminal debug
+    def debug_callback(self,msg):
+        if msg.data == "query_goal":
+            print('[NAV DEBUG]: The goal is: %f, %f, %f' %(self.x_g, self.y_g, self.theta_g))
+        elif msg.data == "query_state":
+            print("[NAV DEBUG]: The current state is: %s" %str(self.mode))
+        elif msg.data == "why_u_do_dis?":
+            print("[NAV DEBUG]: The current position delta is: %f, %f, %f" %(self.x_g - self.x, self.y_g - self.y, self.theta_g-self.theta))
+        else:
+            print("[NAV DEBUG]: Invalid debug message")
+            
     #for the interface topic between nav and supervisor 
     def post_callback(self,data):
         rospy.loginfo("Received from interface topic")
         
         # received true = stop
         if data.data is True:   
-            #self.mode_at_stop = self.mode # save current mode
-            
+                        
             # store current goal
             self.x_saved = self.x_g
             self.y_saved = self.y_g
@@ -157,17 +169,10 @@ class Navigator:
             self.x_g = None
             self.y_g = None
             self.theta_g = None
-            self.switch_mode(Mode.IDLE)
-        '''    
-        else:
-        
-            # reset goal
-            self.x_g = self.x_saved
-            self.y_g = self.y_saved
-            self.theta_g = self.theta_saved
             
-            self.switch_mode(self.mode_at_stop) # go back to old mode
-            '''
+            #put machine back into idle
+            self.switch_mode(Mode.IDLE)
+      
         return
         
     # for getting the laser data    
@@ -258,7 +263,10 @@ class Navigator:
         returns whether the robot has reached the goal position with enough
         accuracy to return to idle state
         """
-        return (linalg.norm(np.array([self.x-self.x_g, self.y-self.y_g])) < self.near_thresh and abs(wrapToPi(self.theta - self.theta_g)) < self.at_thresh_theta)
+        # if the goal is none, it's already there you dumb Winnebago
+        if self.x_g is None:
+            return True
+        return (linalg.norm(np.array([self.x-self.x_g, self.y-self.y_g])) < self.at_thresh and abs(wrapToPi(self.theta - self.theta_g)) < self.at_thresh_theta)
 
     def aligned(self):
         """
@@ -343,6 +351,7 @@ class Navigator:
         elif self.mode == Mode.ALIGN:
             V, om = self.heading_controller.compute_control(self.x, self.y, self.theta, t)
         elif self.mode == Mode.BACKING_UP:
+            #extract elements from the queue
             V, om = deQ_buffer()
         else:
             V = 0.
@@ -388,13 +397,35 @@ class Navigator:
         problem = AStar(state_min,state_max,x_init,x_goal,self.occupancy,self.plan_resolution)
 
         rospy.loginfo("Navigator: computing navigation plan")
+        
         success =  problem.solve()
-        print("Ran Solve")
         if not success:
             rospy.loginfo("Planning failed")
             return
         rospy.loginfo("Planning Succeeded")
-
+        
+        '''
+        self.iters = 0
+        success = False
+        while not success:
+            success =  problem.solve()
+            print("Ran Solve")
+            if not success and not self.at_goal():
+                if self.iters < 5 and self.theta_g is not None:
+                    rospy.loginfo("Planning Iteration: %d", self.iters) 
+                    rospy.loginfo("Planning failed, adjusting heading and retrying")
+                    #increment heading
+                    self.theta_g = wrapToPi(self.theta_g + np.pi/8.0)
+                    rospy.loginfo("New heading: %f", self.theta_g)
+                    #increment count
+                    self.iters += 1
+                else:
+                    rospy.loginfo("Planning failed")
+                    return
+        
+        rospy.loginfo("Planning Succeeded")
+        '''
+        
         planned_path = problem.path
 
         # Check whether path is too short
@@ -463,7 +494,7 @@ class Navigator:
                 print e
                 pass
             
-            """    
+            """  
             def if_about_to_hit_wall():
                 
                 # check if inflated turtlebot circumference will hit the wall

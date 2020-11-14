@@ -715,14 +715,16 @@
         <collision name='collision'>
           <geometry>
             <box>
-              <size>0.508001016002 0.001 1</size>
+              <size>0.408001016002 0.001 1</size>
+              <!--<size>0.508001016002 0.001 1</size>-->
             </box>
           </geometry>
         </collision>
         <visual name='visual'>
           <geometry>
             <box>
-              <size>0.508001016002 0.001 1</size>
+              <size>0.408001016002 0.001 1</size>
+              <!--<size>0.508001016002 0.001 1</size>-->
             </box>
           </geometry>
           <material>
@@ -742,14 +744,16 @@
         <collision name='collision'>
           <geometry>
             <box>
-              <size>0.508001016002 0.001 1</size>
+              <size>0.408001016002 0.001 1</size>
+              <!--<size>0.508001016002 0.001 1</size>-->
             </box>
           </geometry>
         </collision>
         <visual name='visual'>
           <geometry>
             <box>
-              <size>0.508001016002 0.001 1</size>
+              <size>0.408001016002 0.001 1</size>
+              <!--<size>0.508001016002 0.001 1</size>-->
             </box>
           </geometry>
           <material>
@@ -787,12 +791,13 @@
           </material>
         </visual>
       </link>
-      <pose frame=''>2.61620523241 1.52400304801 0 0 0 1.57079632679</pose>
+      <pose frame=''>2.666418 1.52400304801 0 0 0 1.57079632679</pose>
+      <!--<pose frame=''>2.61620523241 1.52400304801 0 0 0 1.57079632679</pose>-->
     </model>
 
 
     
-    <!--<model name='Stop Sign'>
+    <model name='Stop Sign'>
       <link name='link'>
         <collision name='collision'>
           <geometry>
@@ -849,7 +854,7 @@
         <gravity>1</gravity>
       </link>
       <pose frame=''>2.071689 2.073017 0.0 0.0 0.0 0.0</pose>
-    </model>-->
+    </model>
     
     <!--<model name='Banana'>
       <static>1</static>
@@ -907,7 +912,7 @@
       </model>
       
       <model name='banana_box'>
-        <pose frame=''>2.617258 1.562461 0.24907 1.57079632679 0.0 -1.57079632679</pose>
+        <pose frame=''>0.717 0.02 0.2017 1.57079632679 0.0 0.0</pose>
           <link name='link_1'>
               <visual name='visual'>
                 <geometry>
@@ -1007,7 +1012,7 @@
       </model>
       
       <model name='squirtle_box'>
-        <pose frame=''>3.15 1.6 0 0.0 0.0 0.0</pose>
+        <pose frame=''>3.15 1.6 0 0.0 0.0 1.57079632679</pose>
           <link name='link_1'>
               <visual name='visual'>
                 <geometry>
@@ -1031,7 +1036,7 @@
             <allow_auto_disable>1</allow_auto_disable>
       </model>
       
-      <model name='bulbasaur_box'>
+      <!--<model name='bulbasaur_box'>
         <pose frame=''>1.752422 0.02 0.2017 1.57079632679 0.0 0.0</pose>
           <link name='link_1'>
               <visual name='visual'>
@@ -1080,7 +1085,7 @@
             </link>
             <static>1</static>
             <allow_auto_disable>1</allow_auto_disable>
-      </model>
+      </model>-->
 
     <!--<model name='flag'>
       <link name='plate'>

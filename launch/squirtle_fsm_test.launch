@@ -13,7 +13,7 @@
     </include>
     -->
     <!--<node name="gazebo" pkg="gazebo" type="gazebo" args="$(find gazebo_ros)/launch/empty_world.launch" respawn="false" output="screen"/>-->
-    <node pkg="asl_turtlebot" name="nav" type="navigator.py" output="screen"/>
+    <node pkg="asl_turtlebot" name="nav" type="navigator.py" output="log"/>
     <node pkg="asl_turtlebot" name="squirtleFSM" type="squirtle.py" output="screen"/>
     <node pkg="asl_turtlebot" name="turtlebot_supervisor" type="supervisor_nav.py" output="screen"/>
     

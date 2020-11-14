@@ -32,7 +32,7 @@ THETA_EPS = .3
 STOP_TIME = 3
 
 # minimum distance from a stop sign to obey it
-STOP_MIN_DIST = .5
+STOP_MIN_DIST = 0.65 #0.5
 
 # time taken to cross an intersection
 CROSSING_TIME = 10
@@ -68,6 +68,7 @@ class Supervisor:
         self.x = 0
         self.y = 0
         self.theta = 0
+        self.goal_update = False
         
         self.mode = Mode.IDLE
         self.last_mode_printed = None
@@ -76,9 +77,10 @@ class Supervisor:
         #list of the food and it's location
         self.food_data = np.zeros((FOOD_ITEMS, 5))
         self.food_found = [0, 0, 0, 0, 0]
+        self.exploring = True
         
         # delivery location
-        self.squirtle_x = 3.15 # TODO: set squirtle location
+        self.squirtle_x = 3.15 
         self.squirtle_y = 1.6
         self.squirtle_th = 0.0
         
@@ -87,7 +89,7 @@ class Supervisor:
         self.home_y = 1.6
         self.home_th = 0.0
         
-        self.chunky_radius = 0.11 #TODO: Tune this!
+        self.chunky_radius = 0.1 
         
         # ------------------------
         #       publishers
@@ -122,6 +124,8 @@ class Supervisor:
         rospy.Subscriber('/detector/cake', DetectedObject, self.cake_detected_callback) 
         # banana detector
         rospy.Subscriber('/detector/banana', DetectedObject, self.banana_detected_callback) 
+        # turtlebot fsm
+        rospy.Subscriber('/post/squirtle_fsm', String, self.post_explore_callback)
         '''
         #[Object]
         rospy.Subscriber('/detector/[object]', DetectedObject, self.[object]_detected_callback)
@@ -160,7 +164,7 @@ class Supervisor:
             raise Exception('This item is not supported: %s'
                 % msg.data)
         rospy.loginfo("The index is: %d", idx)
-         
+        self.goal_update = True 
         if msg.data == "squirtle":
             rospy.loginfo("Setting goal to delivery")
             self.x_g = self.squirtle_x 
@@ -175,6 +179,12 @@ class Supervisor:
         #now publish to cmd nav
         self.nav_to_pose()
         self.mode = Mode.NAV
+        
+    def post_explore_callback(self,msg): 
+        rospy.loginfo("[SUPERVISOR]: Received msg: %s", msg.data)
+        # check message string
+        if msg.data == "done_exploring":
+            self.exploring = False
         
     def gazebo_callback(self, msg):
         pose = msg.pose[msg.name.index("turtlebot3_burger")]
@@ -198,6 +208,7 @@ class Supervisor:
             nav_pose_origin = self.trans_listener.transformPose(origin_frame, msg)
             self.x_g = nav_pose_origin.pose.position.x
             self.y_g = nav_pose_origin.pose.position.y
+            self.goal_update = True
             quaternion = (
                     nav_pose_origin.pose.orientation.x,
                     nav_pose_origin.pose.orientation.y,
@@ -226,7 +237,7 @@ class Supervisor:
 
         # distance of the stop sign
         dist = msg.distance
-
+        rospy.loginfo("Stop Sign found at %f distance", dist)
         # if close enough and in nav mode, stop
         if dist > 0 and dist < STOP_MIN_DIST and self.mode == Mode.NAV:
             self.init_stop_sign()
@@ -281,29 +292,29 @@ class Supervisor:
         Arguments:msg from the topic, food item label
         Returns:False if nothing was added, true if added
         '''
-        #get the angle of the frame wrt the world        
+        # get the angle of the frame wrt the world        
         theta_food = 0.5*wrapToPi(msg.thetaleft-msg.thetaright) + self.theta
         
-        #find the x, y, of the food using the angle
+        # find the x, y, of the food using the angle
         x_food = self.x #+(msg.distance - self.chunky_radius)*np.cos(theta_food) 
         y_food = self.y #+(msg.distance - self.chunky_radius)*np.sin(theta_food) 
-        #check to see if the food was added or we have a better distance
-        if self.food_found[label] is 0 or msg.distance < self.food_data[label,3]:#np.abs(theta_food) < self.food_data[label,2]:           
+        # check to see if the food was added or we have a better distance, but only when we are exploring
+        if self.exploring and (self.food_found[label] is 0 or msg.distance < self.food_data[label,3]):#np.abs(theta_food) < self.food_data[label,2]:           
             
-            #popluate the array at the correct row
+            # popluate the array at the correct row
             self.food_data[label] = x_food, y_food, theta_food, msg.distance, msg.confidence
             
-            #indicate that we found the food
+            # indicate that we found the food
             self.food_found[label] = 1
             
             # add marker to location of food
             #self.broadcast_tf(x_food,y_food,0)
             self.add_marker(x_food, y_food, label)
             
-            #return true to indicate successful addition
+            # return true to indicate successful addition
             return True
             
-        #else return false
+        # else return false
         else:
             return False
             
@@ -367,7 +378,7 @@ class Supervisor:
 
     def go_to_pose(self):
         """ sends the current desired pose to the pose controller """
-
+        
         pose_g_msg = Pose2D()
         pose_g_msg.x = self.x_g
         pose_g_msg.y = self.y_g
@@ -377,13 +388,14 @@ class Supervisor:
 
     def nav_to_pose(self):
         """ sends the current desired pose to the navigator """
-
-        nav_g_msg = Pose2D()
-        nav_g_msg.x = self.x_g
-        nav_g_msg.y = self.y_g
-        nav_g_msg.theta = self.theta_g
-        #rospy.loginfo("[SUPERVISOR]: publishing to cmd_nav")
-        self.nav_goal_publisher.publish(nav_g_msg)
+        if self.goal_update:
+            self.goal_update = False
+            nav_g_msg = Pose2D()
+            nav_g_msg.x = self.x_g
+            nav_g_msg.y = self.y_g
+            nav_g_msg.theta = self.theta_g
+            #rospy.loginfo("[SUPERVISOR]: publishing to cmd_nav")
+            self.nav_goal_publisher.publish(nav_g_msg)
 
     def stay_idle(self):
         """ sends zero velocity to stay put """
@@ -412,6 +424,7 @@ class Supervisor:
         msg.data = True
         self.sm_interface_publisher.publish(msg)
         
+        self.goal_update = True
         self.stop_sign_start = rospy.get_rostime()
         self.mode = Mode.STOP
 
@@ -458,7 +471,7 @@ class Supervisor:
 
         # logs the current mode
         if not(self.last_mode_printed == self.mode):
-            rospy.loginfo("Current Mode: %s", self.mode)
+            rospy.loginfo("[SUPERVISOR]: Current Mode: %s", self.mode)
             self.last_mode_printed = self.mode
 
         # checks wich mode it is in and acts accordingly
@@ -471,7 +484,8 @@ class Supervisor:
             if self.close_to(self.x_g,self.y_g,self.theta_g):
                 self.mode = Mode.IDLE
             else:
-                self.go_to_pose()
+                #self.go_to_pose()
+                self.nav_to_pose()
 
         elif self.mode == Mode.STOP:
             # at a stop sign
@@ -483,7 +497,7 @@ class Supervisor:
         elif self.mode == Mode.CROSS:
             # crossing an intersection
             if self.has_crossed():
-                self.mode = Mode.NAV
+                self.mode = Mode.POSE
             else:
                 self.nav_to_pose()
 

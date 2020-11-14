@@ -66,7 +66,7 @@ class Squirtle:
     #    Subscriber callbacks
     # ---------------------------
     
-    def post_callback(self,msg): # TODO: add publisher for done_exploring in navigator/request_pub?
+    def post_callback(self,msg): 
         rospy.loginfo("[SQUIRTLE]: Received msg: %s", msg.data)
         # check message string
         if msg.data == "at_goal":
@@ -149,6 +149,10 @@ class Squirtle:
         # switch to navigating to delivery location
         self.switch_mode(Mode.NAV_2_DELIV)
         
+    def is_done_exploring(self):
+        return self.mode == Mode.EXPLORE
+    
+        
     # ----------------------------
     #    Machine Run Function
     # ----------------------------
@@ -160,7 +164,7 @@ class Squirtle:
 
         # logs the current mode
         if not(self.last_mode_printed == self.mode):
-            rospy.loginfo("Current Mode: %s", self.mode)
+            rospy.loginfo("[SQUIRTLE]: Current Mode: %s", self.mode)
             self.last_mode_printed = self.mode
 
         # checks wich mode it is in and acts accordingly

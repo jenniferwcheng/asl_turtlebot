@@ -401,6 +401,10 @@ class Navigator:
         success =  problem.solve()
         if not success:
             rospy.loginfo("Planning failed")
+            #tell squirtle we could not find a path
+            msg = String()
+            msg.data = 'no_path'
+            self.publish_squirtle.publish(msg)
             return
         rospy.loginfo("Planning Succeeded")
         

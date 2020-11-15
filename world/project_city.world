@@ -853,7 +853,7 @@
         <kinematic>0</kinematic>
         <gravity>1</gravity>
       </link>
-      <pose frame=''>2.071689 2.073017 0.0 0.0 0.0 0.0</pose>
+      <pose frame=''>3.019969 2.485898 0.0 0.0 0.0 0.0</pose>
     </model>
     
     <!--<model name='Banana'>

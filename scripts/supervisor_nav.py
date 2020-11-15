@@ -32,7 +32,7 @@ THETA_EPS = .3
 STOP_TIME = 3
 
 # minimum distance from a stop sign to obey it
-STOP_MIN_DIST = 0.65 #0.5
+STOP_MIN_DIST = 0.5 #0.5
 
 # time taken to cross an intersection
 CROSSING_TIME = 10
@@ -55,6 +55,7 @@ APPLE = 1
 ORANGE = 2
 CAKE = 3
 BANANA = 4
+STOP_SIGN = 5
 
 print "supervisor settings:\n"
 print "use_gazebo = %s\n" % use_gazebo
@@ -88,6 +89,12 @@ class Supervisor:
         self.home_x = 3.15
         self.home_y = 1.6
         self.home_th = 0.0
+        
+        # stop sign location
+        self.stop_x = None
+        self.stop_y = None
+        self.stop_th = None
+        self.stop_dist = 100.
         
         self.chunky_radius = 0.1 
         
@@ -146,8 +153,9 @@ class Supervisor:
     # reads the item string and sets up the goal for it.        
     def post_callback(self, msg):
         rospy.loginfo("[SUPERVISOR]: Post rxed: %s", msg.data)
+        #set the defualt index to -1
         idx = -1
-        isSquirtle = False
+        
         if msg.data == "hotdog":
             idx = 0
         elif msg.data == "apple":
@@ -165,16 +173,21 @@ class Supervisor:
                 % msg.data)
         rospy.loginfo("The index is: %d", idx)
         self.goal_update = True 
+        #if the label was squirlte, we need to deliver
         if msg.data == "squirtle":
             rospy.loginfo("Setting goal to delivery")
             self.x_g = self.squirtle_x 
             self.y_g = self.squirtle_y
             self.theta_g = self.squirtle_th
+        #else we need to go pickup the item
         else:
             #populate the goal state based on where we think the food is:
-            self.x_g = self.food_data[idx][0]
-            self.y_g = self.food_data[idx][1]
-            self.theta_g =  self.food_data[idx][2]
+            if self.food_found[idx] == 1: #make sure we actually found the item before proceeding
+                self.x_g = self.food_data[idx][0]
+                self.y_g = self.food_data[idx][1]
+                self.theta_g =  self.food_data[idx][2]
+            else: #if we haven't found the item, raise an error
+                raise Exception("%s item has not been found" %msg.data)
         
         #now publish to cmd nav
         self.nav_to_pose()
@@ -185,6 +198,8 @@ class Supervisor:
         # check message string
         if msg.data == "done_exploring":
             self.exploring = False
+        elif msg.data == 'no_path':
+            self.mode == Mode.IDLE
         
     def gazebo_callback(self, msg):
         pose = msg.pose[msg.name.index("turtlebot3_burger")]
@@ -234,11 +249,18 @@ class Supervisor:
     def stop_sign_detected_callback(self, msg):
         """ callback for when the detector has found a stop sign. Note that
         a distance of 0 can mean that the lidar did not pickup the stop sign at all """
-
+        
         # distance of the stop sign
-        dist = msg.distance
+        dist = msg.distance 
         rospy.loginfo("Stop Sign found at %f distance", dist)
+        
+        """
+        if msg.distance < self.stop_dist:
+            self.stop_x, self.stop_y, self.stop_th = self.get_stop_sign_location(msg)
+        """
         # if close enough and in nav mode, stop
+        
+        # TODO: rewrite this to stop only if we are facing stop sign the right way and in a certain range
         if dist > 0 and dist < STOP_MIN_DIST and self.mode == Mode.NAV:
             self.init_stop_sign()
             
@@ -285,7 +307,21 @@ class Supervisor:
     # ---------------------------------------------
     #             Helper Functions
     # ---------------------------------------------
+    
+    def get_stop_sign_location(self,msg):
+        # get the angle of the frame wrt the world        
+        theta_stop = 0.5*wrapToPi(msg.thetaleft-msg.thetaright) + self.theta
         
+        # find the x, y, of the stop sign using the angle
+        x_stop = self.x + msg.distance*np.cos(theta_stop) 
+        y_stop = self.y + msg.distance*np.sin(theta_stop) 
+        
+        # publish marker on rviz
+        self.add_marker(x_stop, y_stop, STOP_SIGN)
+        
+        return x_stop, y_stop, theta_stop
+   
+    
     def add_food_to_list(self, msg, label):
         '''
         Description:Add the food item to the data matrix
@@ -365,6 +401,10 @@ class Supervisor:
             marker.color.r = 1.0
             marker.color.g = 1.0
             marker.color.b = 0.0
+        elif label == STOP_SIGN:
+            marker.color.r = 1.0
+            marker.color.g = 1.0
+            marker.color.b = 1.0
         
         self.vis_pub.publish(marker)
         rospy.loginfo('Published marker!')

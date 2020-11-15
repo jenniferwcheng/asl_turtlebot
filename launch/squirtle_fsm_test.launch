@@ -12,6 +12,9 @@
         <arg name="gui" value="$(arg gui)"/>
     </include>
     -->
+    <!--<node pkg="asl_turtlebot" name="detector" type="detector_mobilenet.py" output="screen">
+      <param name="min_score" value="0.5"/>
+    </node>-->
     <!--<node name="gazebo" pkg="gazebo" type="gazebo" args="$(find gazebo_ros)/launch/empty_world.launch" respawn="false" output="screen"/>-->
     <node pkg="asl_turtlebot" name="nav" type="navigator.py" output="log"/>
     <node pkg="asl_turtlebot" name="squirtleFSM" type="squirtle.py" output="screen"/>

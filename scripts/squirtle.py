@@ -22,6 +22,7 @@ class Mode(Enum):
     PICKING_UP = 3
     NAV_2_DELIV = 4 
     DELIVERING = 5
+    NAV_2_WAYPT = 6
      
 WAIT_TIME = 5 # [s]   
 DELIVER_TIME = 5 # [s]
@@ -37,11 +38,14 @@ class Squirtle:
         # state machine variables
         self.mode = Mode.EXPLORE
         self.last_mode_printed = None
+        
         # flags
         self.is_at_goal = False
         
         # delivery variables
-        self.order_items = []
+        self.order_items = [] #order list from user
+        self.item_queue = [] #queue for items where a path could not be planned
+        self.current_item = None
         self.num_items = 0
         self.current_order = 0
         
@@ -60,6 +64,7 @@ class Squirtle:
         #       subscribers
         # ------------------------
         rospy.Subscriber('/post/squirtle_fsm', String, self.post_callback)
+        rospy.Subscriber('/debug/squirtle_fsm', String, self.debug_callback)
         rospy.Subscriber('/delivery_request', String, self.delivery_callback)
     
     # ---------------------------
@@ -75,8 +80,17 @@ class Squirtle:
             self.is_at_goal = False
         elif msg.data == "done_exploring":
             rospy.loginfo("Handling: done_exploring")
-            self.switch_mode(Mode.WAIT_FOR_ORDER) 
+            self.switch_mode(Mode.WAIT_FOR_ORDER)
+        elif msg.data == "no_path" and self.mode == NAV_2_PICKUP:
+            rospy.loginfo("Current item not obtainable")
+            self.item_queue = self.item_queue.append(self.current_item)
+            self.pickup_order()
             
+    def debug_callback(self,msg):
+        if msg.data == 'query_state':
+            print("[SQUIRTLE DEBUG]: Mode:%s" %str(self.mode))
+        elif msg.data == 'query_queue':
+            print("[SQUIRTLE DEBUG]: Queue: %s" %str(self.order_queue))
         
     def delivery_callback(self,msg):
         # only accept deliveries if we are in WAIT_FOR_ORDER mode
@@ -84,7 +98,7 @@ class Squirtle:
             # make sure order is not empty
             if msg.data == '':
                 rospy.loginfo("No order received")
-                return
+                #return
             else:
                 # split order into separate strings, comma delimited ["a,b,c"] -> ["a","b","c"]    
                 self.order_items = msg.data.strip().split(',')
@@ -103,25 +117,80 @@ class Squirtle:
     def switch_mode(self, new_mode):
         rospy.loginfo("Switching from %s -> %s", self.mode, new_mode)
         self.mode = new_mode
-        
+    
+    def send_item(self):
+        # clear the goal status flag
+        self.is_at_goal = False
+        # tell supervisor which order to pick up
+        self.supervisor_fsm_pub.publish(self.current_item)
+        #self.supervisor_fsm_pub.publish(self.order_items[self.num_items].strip())
+        # switch to picking up state
+        self.switch_mode(Mode.NAV_2_PICKUP)
+    
     def pickup_order(self):
+        #check to see if we still have items in our list
+        if not self.order_items:
+            rospy.loginfo("All items picked up")
+            #return true to indicate list is complete
+            return True
+        else: # if we have items to pickup
+            rospy.loginfo("More items to get")
+            #pop off the list
+            self.current_item = self.order_items.pop(0) #FIFO
+            #send item to supervisor
+            self.send_item()
+            # return false to indicate list not empty
+            return False
+    '''        
+    def pickup_order(self):
+        """
+        Argument: self
+        Return: true if all orders have been picked up
+        
+        Looks at the item list, grabs the top item for pickup
+        """
         if self.num_items is not 0:
             rospy.loginfo("More items to get")
             # decrement list count
             self.num_items -= 1
+            self.current_item = self.order_items[self.num_items].strip()
+            self.send_item()
+            """
             # clear the goal status flag
             self.is_at_goal = False
             # tell supervisor which order to pick up
-            self.supervisor_fsm_pub.publish(self.order_items[self.num_items].strip())
+            self.supervisor_fsm_pub.publish(self.current_item)
+            #self.supervisor_fsm_pub.publish(self.order_items[self.num_items].strip())
             # switch to picking up state
             self.switch_mode(Mode.NAV_2_PICKUP)
+            """
             # return false to indicate list not empty
             return False
         else:
             rospy.loginfo("All items picked up")
             #return true to indicate list is complete
             return True
-    
+    '''
+    def check_item_queue(self):
+        """
+        Arguments: self
+        Returns true if there was an item that was in the queue that needed to be picked up
+        """
+        #check if queue is empty
+        if not self.item_queue:
+            #indicate empty queue to terminal
+            print("[SQUIRTLE], queue is empty!")
+            return False
+        #else we have items in the queue we need to plan to
+        else:
+            #extract first element in the queue
+            self.current_item = self.item_queue.pop(0)
+            #send item to supervisor for pickup
+            self.send_item()
+            #set return value to true to indicate we popped something from the queue
+            return True
+                  
+            
     def start_timer(self,duration):
     
         # set the duration
@@ -169,6 +238,7 @@ class Squirtle:
 
         # checks wich mode it is in and acts accordingly
         if self.mode == Mode.EXPLORE:
+            # This is handled in the post_callback
             pass
              
         elif self.mode == Mode.WAIT_FOR_ORDER:
@@ -188,9 +258,14 @@ class Squirtle:
             if self.is_time_expired():
                 # finished picking up, so reset goal
                 self.is_at_goal = False
-                if self.pickup_order(): # returns true if we finished picking up all the orders
+                #check item queue
+                if self.check_item_queue():
+                    pass
+                elif self.pickup_order(): # returns true if we finished picking up all the orders
                     # we are done, so switch to delivery
-                    self.deliver_order() # transition occurs in this function   
+                    self.deliver_order() # transition occurs in this function
+                    #purge to order queue
+                    #self.item_queue.clear()  
                           
         elif self.mode == Mode.NAV_2_DELIV:
             if self.is_at_goal:

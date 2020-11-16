@@ -168,7 +168,7 @@ class Detector:
             meas = ranges[rightray_indx:] + ranges[:leftray_indx]
         else:
             meas = ranges[rightray_indx:leftray_indx]
-
+ 
         num_m, dist = 0, 0
         for m in meas:
             if m>0 and m<float('Inf'):

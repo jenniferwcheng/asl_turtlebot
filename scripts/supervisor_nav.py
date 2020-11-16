@@ -94,6 +94,8 @@ class Supervisor:
         self.stop_x = None
         self.stop_y = None
         self.stop_th = None
+        self.stop_th_cam = None
+        self.stop_cnfd = None
         self.stop_dist = 100.
         
         self.chunky_radius = 0.1 
@@ -254,15 +256,39 @@ class Supervisor:
         dist = msg.distance 
         rospy.loginfo("Stop Sign found at %f distance", dist)
         
-        """
-        if msg.distance < self.stop_dist:
-            self.stop_x, self.stop_y, self.stop_th = self.get_stop_sign_location(msg)
-        """
+        # get stop sign location
+        x, y, th, th_cam = self.get_stop_sign_location(msg)
+        cnfd = msg.confidence
+        
+        
+        #if self.stop_th_cam is not None:
+            #rospy.loginfo("New Theta: %f, Old Theta: %f", th_cam, self.stop_th_cam)
+        
+        if self.stop_th_cam is None:
+            self.stop_x = x
+            self.stop_y = y
+            self.stop_th = th
+            self.stop_th_cam = th_cam
+            self.stop_cnfd = cnfd
+            
+            # publish marker on rviz
+            self.add_marker(self.stop_x, self.stop_y, STOP_SIGN)
+        elif np.abs(th_cam) < np.abs(self.stop_th_cam) and cnfd > self.stop_cnfd:
+            rospy.loginfo("New Theta: %f, Old Theta: %f", th_cam, self.stop_th_cam)
+            self.stop_x = x
+            self.stop_y = y
+            self.stop_th = th
+            self.stop_th_cam = th_cam
+            self.stop_cnfd = cnfd
+            # publish marker on rviz
+            self.add_marker(self.stop_x, self.stop_y, STOP_SIGN)
+            
         # if close enough and in nav mode, stop
         
+        
         # TODO: rewrite this to stop only if we are facing stop sign the right way and in a certain range
-        if dist > 0 and dist < STOP_MIN_DIST and self.mode == Mode.NAV:
-            self.init_stop_sign()
+        #if dist > 0 and dist < STOP_MIN_DIST and self.mode == Mode.NAV:
+            #self.init_stop_sign()
             
     def hot_dog_detected_callback(self, msg):
     
@@ -310,18 +336,36 @@ class Supervisor:
     
     def get_stop_sign_location(self,msg):
         # get the angle of the frame wrt the world        
-        theta_stop = 0.5*wrapToPi(msg.thetaleft-msg.thetaright) + self.theta
+        theta_cam = 0.5*wrapToPi(msg.thetaleft+msg.thetaright)# + self.theta
+        theta_stop = self.theta + theta_cam
         
         # find the x, y, of the stop sign using the angle
         x_stop = self.x + msg.distance*np.cos(theta_stop) 
-        y_stop = self.y + msg.distance*np.sin(theta_stop) 
+        y_stop = self.y + msg.distance*np.sin(theta_stop)
         
-        # publish marker on rviz
-        self.add_marker(x_stop, y_stop, STOP_SIGN)
-        
-        return x_stop, y_stop, theta_stop
+        return x_stop, y_stop, theta_stop, theta_cam
    
-    
+    def check_stop_sign_distance(self):
+        returnVal = False
+        #check heading is within bounds
+        if self.stop_th is not None:
+            #check if the heading is within range
+            if self.theta < self.stop_th+np.pi/8.0 and self.theta > self.stop_th-np.pi/8.0:
+                #calculate the delta x and y
+                delta_x = self.stop_x-self.x
+                delta_y = self.stop_y-self.y
+                #calculate euclidian norm
+                rho = np.sqrt(delta_x**2 + delta_y**2) 
+                #check to see if we are remotely close to the sign
+                if rho < 1.25*STOP_MIN_DIST:
+                    #calculate the projected distance based on the stop sign direction
+                    dist = (delta_x*np.cos(self.stop_th) + delta_y*np.sin(self.stop_th))/rho
+                    #check to see if the projection distance is within stopping distance
+                    if dist < STOP_MIN_DIST/1.5:
+                        returnVal = True
+        
+        return returnVal
+        
     def add_food_to_list(self, msg, label):
         '''
         Description:Add the food item to the data matrix
@@ -329,11 +373,12 @@ class Supervisor:
         Returns:False if nothing was added, true if added
         '''
         # get the angle of the frame wrt the world        
-        theta_food = 0.5*wrapToPi(msg.thetaleft-msg.thetaright) + self.theta
+        #theta_food = 0.5*wrapToPi(msg.thetaleft-msg.thetaright) + self.theta
         
         # find the x, y, of the food using the angle
         x_food = self.x #+(msg.distance - self.chunky_radius)*np.cos(theta_food) 
         y_food = self.y #+(msg.distance - self.chunky_radius)*np.sin(theta_food) 
+        theta_food = self.theta
         # check to see if the food was added or we have a better distance, but only when we are exploring
         if self.exploring and (self.food_found[label] is 0 or msg.distance < self.food_data[label,3]):#np.abs(theta_food) < self.food_data[label,2]:           
             
@@ -542,7 +587,9 @@ class Supervisor:
                 self.nav_to_pose()
 
         elif self.mode == Mode.NAV:
-            if self.close_to(self.x_g,self.y_g,self.theta_g):
+            if self.check_stop_sign_distance():
+                self.init_stop_sign()
+            elif self.close_to(self.x_g,self.y_g,self.theta_g):
                 self.mode = Mode.IDLE
             else:
                 self.nav_to_pose()

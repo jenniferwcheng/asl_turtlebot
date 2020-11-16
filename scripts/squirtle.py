@@ -81,7 +81,7 @@ class Squirtle:
         elif msg.data == "done_exploring":
             rospy.loginfo("Handling: done_exploring")
             self.switch_mode(Mode.WAIT_FOR_ORDER)
-        elif msg.data == "no_path" and self.mode == NAV_2_PICKUP:
+        elif msg.data == "no_path" and self.mode == Mode.NAV_2_PICKUP:
             rospy.loginfo("Current item not obtainable")
             self.item_queue = self.item_queue.append(self.current_item)
             self.pickup_order()

@@ -98,7 +98,7 @@ class Supervisor:
         self.stop_cnfd = None
         self.stop_dist = 100.
         
-        self.chunky_radius = 0.1 
+        #self.chunky_radius = 0.1 
         
         # ------------------------
         #       publishers
@@ -120,6 +120,8 @@ class Supervisor:
         # ------------------------
         # service post topic
         rospy.Subscriber('/post/supervisor_fsm', String, self.post_callback)
+        # service debug topic
+        rospy.Subscriber('/debug/supervisor_fsm', String, self.debug_callback)
         
         # stop sign detector
         rospy.Subscriber('/detector/stop_sign', DetectedObject, self.stop_sign_detected_callback)
@@ -132,15 +134,12 @@ class Supervisor:
         # cake detector
         rospy.Subscriber('/detector/cake', DetectedObject, self.cake_detected_callback) 
         # banana detector
-        rospy.Subscriber('/detector/banana', DetectedObject, self.banana_detected_callback) 
+        rospy.Subscriber('/detector/banana', DetectedObject, self.banana_detected_callback)
+        # dog detector
+        rospy.Subscriber('/detector/dog', DetectedObject, self.dog_detected_callback)
         # turtlebot fsm
         rospy.Subscriber('/post/squirtle_fsm', String, self.post_explore_callback)
-        '''
-        #[Object]
-        rospy.Subscriber('/detector/[object]', DetectedObject, self.[object]_detected_callback)
-        #[Object]
-        rospy.Subscriber('/detector/[object]', DetectedObject, self.[object]_detected_callback)
-        '''
+
         # high-level navigation pose
         rospy.Subscriber('/nav_pose', Pose2D, self.nav_pose_callback)
         # if using gazebo, we have access to perfect state
@@ -195,13 +194,20 @@ class Supervisor:
         self.nav_to_pose()
         self.mode = Mode.NAV
         
+    def debug_callback(self, msg):
+        if msg.data == "query_stop_sign_pose":
+            print("[SUPERVISOR DEBUG]: Stop Sign Pose x: %f, y: %f, th %f" %(self.stop_x, self.stop_y, self.stop_th))
+        else:
+            print("[SUPERVISOR DEBUG]: Invalid request")
+            
+               
     def post_explore_callback(self,msg): 
         rospy.loginfo("[SUPERVISOR]: Received msg: %s", msg.data)
         # check message string
         if msg.data == "done_exploring":
             self.exploring = False
-        elif msg.data == 'no_path':
-            self.mode == Mode.IDLE
+        #elif msg.data == 'no_path':
+            #self.mode == Mode.IDLE
         
     def gazebo_callback(self, msg):
         pose = msg.pose[msg.name.index("turtlebot3_burger")]
@@ -284,9 +290,6 @@ class Supervisor:
             self.add_marker(self.stop_x, self.stop_y, STOP_SIGN)
             
         # if close enough and in nav mode, stop
-        
-        
-        # TODO: rewrite this to stop only if we are facing stop sign the right way and in a certain range
         #if dist > 0 and dist < STOP_MIN_DIST and self.mode == Mode.NAV:
             #self.init_stop_sign()
             
@@ -330,6 +333,10 @@ class Supervisor:
         #else:
             #rospy.loginfo("Did not add banana")
             
+    def dog_detected_callback(self, msg):
+    
+        rospy.loginfo("WOOF!")
+            
     # ---------------------------------------------
     #             Helper Functions
     # ---------------------------------------------
@@ -360,8 +367,9 @@ class Supervisor:
                 if rho < 1.25*STOP_MIN_DIST:
                     #calculate the projected distance based on the stop sign direction
                     dist = (delta_x*np.cos(self.stop_th) + delta_y*np.sin(self.stop_th))/rho
+                    dist_ortho = (delta_y*np.cos(self.stop_th) + delta_x*np.sin(self.stop_th))/rho
                     #check to see if the projection distance is within stopping distance
-                    if dist < STOP_MIN_DIST/1.5:
+                    if dist < STOP_MIN_DIST and dist > 0.0 and dist_ortho < 0.0:
                         returnVal = True
         
         return returnVal

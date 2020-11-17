@@ -96,5 +96,5 @@
   <node pkg="rqt_gui"
         type="rqt_gui"
         name="rqt_gui"
-        args="--perspective-file $(find asl_turtlebot)/cfg/squirtlebot.perspective"/>
+        args="--perspective-file $(find asl_turtlebot)/cfg/squirtlebot3.perspective"/>
 </launch>

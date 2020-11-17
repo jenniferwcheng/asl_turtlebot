@@ -1036,6 +1036,31 @@
             <allow_auto_disable>1</allow_auto_disable>
       </model>
       
+      <model name='dog_box'>
+        <pose frame=''>2.017065 2.100060 0.258166 -2.313087 -1.57079632679 -1.57079632679</pose>
+          <link name='link_1'>
+              <visual name='visual'>
+                <geometry>
+                  <box>
+                    <size>0.4 0.3 0.001</size>
+                  </box>
+                </geometry>
+                     <material>
+                  <script>
+                    <uri>model://dog_box/materials/scripts</uri>
+                    <uri>model://dog_box/materials/textures</uri>
+                    <name>dog_pat</name>
+                  </script>
+                </material>
+              
+                <cast_shadows>1</cast_shadows>
+                <transparency>0</transparency>
+              </visual>
+            </link>
+            <static>1</static>
+            <allow_auto_disable>1</allow_auto_disable>
+      </model>
+      
       <!--<model name='bulbasaur_box'>
         <pose frame=''>1.752422 0.02 0.2017 1.57079632679 0.0 0.0</pose>
           <link name='link_1'>

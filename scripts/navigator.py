@@ -12,6 +12,7 @@ from utils import wrapToPi
 from planners import AStar, compute_smoothed_traj
 from grids import StochOccupancyGrid2D
 import scipy.interpolate
+import scipy.ndimage.morphology as morpho
 import matplotlib.pyplot as plt
 from controllers import PoseController, TrajectoryTracker, HeadingController
 from enum import Enum
@@ -22,6 +23,8 @@ from asl_turtlebot.cfg import NavigatorConfig
 # size of buffer
 CMD_HISTORY_SIZE = 25
 
+FAT_TIME = 10.0
+
 # state machine modes, not all implemented
 class Mode(Enum):
     IDLE = 0
@@ -29,6 +32,8 @@ class Mode(Enum):
     TRACK = 2
     PARK = 3
     BACKING_UP = 4
+    FAT_BOI = 5
+    FAT_BOI_ALIGN = 6
 
 class Navigator:
     """
@@ -58,7 +63,7 @@ class Navigator:
         #laser scans for collision
         self.laser_ranges = []
         self.laser_angle_increment = 0.01 # this gets updated
-        self.chunky_radius = 0.1 #TODO: Tune this!
+        self.chunky_radius = 0.11 #TODO: Tune this!
         
         # goal state
         self.x_g = None
@@ -116,7 +121,11 @@ class Navigator:
         self.traj_controller = TrajectoryTracker(self.kpx, self.kpy, self.kdx, self.kdy, self.v_max, self.om_max)
         self.pose_controller = PoseController(0., 0., 0., self.v_max, self.om_max)
         self.heading_controller = HeadingController(self.kp_th, self.om_max)
-
+        
+        # timing variables
+        self.start_time = 0.0
+        self.wait_time = None
+        
         # Publishers
         self.nav_planned_path_pub = rospy.Publisher('/planned_path', Path, queue_size=10)
         self.nav_smoothed_path_pub = rospy.Publisher('/cmd_smoothed_path', Path, queue_size=10)
@@ -197,6 +206,7 @@ class Navigator:
         self.traj_controller.om_max = config["om_max"]
         
         self.chunky_radius = config["chunky_radius"]
+        #rospy.loginfo("[DYN CONFIG] Chunky_radius: %f",self.chunky_radius)
         return config
 
     def cmd_nav_callback(self, data):
@@ -237,10 +247,19 @@ class Navigator:
                                                   self.map_origin[1],
                                                   8,
                                                   self.map_probs)
+            #binary_map = (self.map_probs > 90)
+            #mask = scipy.binary_dilation(binary_map)
+            #inflated_map = 100*(mask ^ (self.map_probs > 90)) + self.map_probs
+            
+            #print(self.map_width)
+            #print(self.map_height)
+            #print(self.map_resolution)
+          
             if self.x_g is not None:
                 # if we have a goal to plan to, replan
-                rospy.loginfo("replanning because of new map")
-                self.replan() # new map, need to replan
+                if (self.mode is not Mode.BACKING_UP) and (self.mode is not Mode.FAT_BOI) and (self.mode is not Mode.FAT_BOI_ALIGN):
+                    rospy.loginfo("replanning because of new map")
+                    self.replan() # new map, need to replan
 
     def shutdown_callback(self):
         """
@@ -346,9 +365,9 @@ class Navigator:
 
         if self.mode == Mode.PARK:
             V, om = self.pose_controller.compute_control(self.x, self.y, self.theta, t)
-        elif self.mode == Mode.TRACK:
+        elif self.mode == Mode.TRACK or self.mode == Mode.FAT_BOI:
             V, om = self.traj_controller.compute_control(self.x, self.y, self.theta, t)
-        elif self.mode == Mode.ALIGN:
+        elif self.mode == Mode.ALIGN or self.mode == Mode.FAT_BOI_ALIGN:
             V, om = self.heading_controller.compute_control(self.x, self.y, self.theta, t)
         elif self.mode == Mode.BACKING_UP:
             #extract elements from the queue
@@ -370,7 +389,25 @@ class Navigator:
     def get_current_plan_time(self):
         t = (rospy.get_rostime()-self.current_plan_start_time).to_sec()
         return max(0.0, t)  # clip negative time to 0
-
+        
+    def inflate_map(self):
+        rospy.loginfo("[NAVIGATOR] Inflating Map")
+        
+        # convert to matrix
+        map_matrix = np.reshape(self.map_probs, (384,384))
+        map_matrix_inflated = morpho.grey_dilation(map_matrix, size=(3,3))
+        
+        # flatten back to list
+        self.map_probs = map_matrix_inflated.flatten().tolist()
+        
+        if self.map_width>0 and self.map_height>0 and len(self.map_probs)>0:
+            self.occupancy = StochOccupancyGrid2D(self.map_resolution,
+                                                  self.map_width,
+                                                  self.map_height,
+                                                  self.map_origin[0],
+                                                  self.map_origin[1],
+                                                  8,
+                                                  self.map_probs)
     def replan(self):
         """
         loads goal into pose controller
@@ -407,29 +444,7 @@ class Navigator:
             self.publish_squirtle.publish(msg)
             return
         rospy.loginfo("Planning Succeeded")
-        
-        '''
-        self.iters = 0
-        success = False
-        while not success:
-            success =  problem.solve()
-            print("Ran Solve")
-            if not success and not self.at_goal():
-                if self.iters < 5 and self.theta_g is not None:
-                    rospy.loginfo("Planning Iteration: %d", self.iters) 
-                    rospy.loginfo("Planning failed, adjusting heading and retrying")
-                    #increment heading
-                    self.theta_g = wrapToPi(self.theta_g + np.pi/8.0)
-                    rospy.loginfo("New heading: %f", self.theta_g)
-                    #increment count
-                    self.iters += 1
-                else:
-                    rospy.loginfo("Planning failed")
-                    return
-        
-        rospy.loginfo("Planning Succeeded")
-        '''
-        
+
         planned_path = problem.path
 
         # Check whether path is too short
@@ -475,12 +490,38 @@ class Navigator:
 
         if not self.aligned():
             rospy.loginfo("Not aligned with start direction")
-            self.switch_mode(Mode.ALIGN)
+            if self.mode == Mode.BACKING_UP:
+                self.switch_mode(Mode.FAT_BOI_ALIGN)
+            else:
+                self.switch_mode(Mode.ALIGN)
             return
-
-        rospy.loginfo("Ready to track")
-        self.switch_mode(Mode.TRACK)
-
+            
+        if self.mode == Mode.BACKING_UP:
+            self.start_timer(FAT_TIME)
+            self.switch_mode(Mode.FAT_BOI)
+        else:
+            rospy.loginfo("Ready to track")
+            self.switch_mode(Mode.TRACK)
+    
+    def start_timer(self,duration):
+    
+        # set the duration
+        self.wait_time = duration
+        # get sys time at start
+        self.start_time = rospy.get_rostime()     
+    
+    def is_time_expired(self):
+        
+        returnVal = False
+        # check the timer is running
+        if self.wait_time is not None:
+            # see if the timer is expired
+            if (rospy.get_rostime()-self.start_time) > rospy.Duration.from_sec(self.wait_time):
+                self.wait_time = None
+                returnVal = True
+        
+        return returnVal
+        
     def run(self):
         rate = rospy.Rate(10) # 10 Hz
         while not rospy.is_shutdown():
@@ -516,11 +557,12 @@ class Navigator:
                 #initialize return value to false
                 returnFlag = False
                 #remove the zeros
+                validRanges = np.trim_zeros(laserRanges)
                 #validRanges = [i for i, dist in enumerate(laserRanges) if dist != 0]
                 #check the minimum scan distance
                 #rospy.loginfo(laserRanges)
                 minScanDist = min(laserRanges)
-                #rospy.loginfo("Minimum Scan Distance: %f", minScanDist)
+                #rospy.loginfo("Minimum Scan Distance: %f, radius: %f", minScanDist, self.chunky_radius)
                 
                 #see if less that our boy's fat body
                 if minScanDist < self.chunky_radius:
@@ -537,6 +579,11 @@ class Navigator:
                 if self.aligned():
                     self.current_plan_start_time = rospy.get_rostime()
                     self.switch_mode(Mode.TRACK)
+            elif self.mode == Mode.FAT_BOI_ALIGN:
+                if self.aligned():
+                    self.current_plan_start_time = rospy.get_rostime()
+                    self.start_timer(FAT_TIME)
+                    self.switch_mode(Mode.FAT_BOI)
             elif self.mode == Mode.TRACK:
                 if if_about_to_hit_wall(self.laser_ranges):
                     rospy.loginfo("About to hit a wall")
@@ -572,12 +619,20 @@ class Navigator:
                     self.V_history =  np.zeros(CMD_HISTORY_SIZE)
                     self.om_history = np.zeros(CMD_HISTORY_SIZE)
                     self.backing_cnt = 0
+                    
+                    #make walls chunkier
+                    self.inflate_map()
+                    
                     self.replan() #switches mode internally
                     #self.switch_mode(Mode.TRACK)
                 else:
                     # increment count
                     self.backing_cnt += 1
-            
+            elif self.mode == Mode.FAT_BOI:
+                if self.is_time_expired:
+                    self.switch_mode(Mode.TRACK)
+                elif self.near_goal():
+                    self.switch_mode(Mode.PARK)    
             
             self.publish_control()
             rate.sleep()

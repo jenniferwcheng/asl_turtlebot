@@ -1,0 +1,17 @@
+material dog_pat
+{
+  technique
+  {
+    pass
+    {
+      texture_unit
+      {
+	    //rotate 90
+	    rotate 0
+        texture dog_biscuits.jpg
+	    scale 1 1
+      }
+    }
+  }
+}
+

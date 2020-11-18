@@ -225,7 +225,7 @@ class Supervisor:
     def rviz_goal_callback(self, msg):
         """ callback for a pose goal sent through rviz """
         origin_frame = "/map" if mapping else "/odom"
-        print("rviz command received!")
+        #print("rviz command received!")
         try:
             
             nav_pose_origin = self.trans_listener.transformPose(origin_frame, msg)
@@ -260,7 +260,7 @@ class Supervisor:
         
         # distance of the stop sign
         dist = msg.distance 
-        rospy.loginfo("Stop Sign found at %f distance", dist)
+        #rospy.loginfo("Stop Sign found at %f distance", dist)
         
         # get stop sign location
         x, y, th, th_cam = self.get_stop_sign_location(msg)

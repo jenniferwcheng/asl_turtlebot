@@ -23,7 +23,7 @@ from asl_turtlebot.cfg import NavigatorConfig
 # size of buffer
 CMD_HISTORY_SIZE = 25
 
-FAT_TIME = 10.0
+FAT_TIME = 5
 
 # state machine modes, not all implemented
 class Mode(Enum):
@@ -508,10 +508,9 @@ class Navigator:
         # set the duration
         self.wait_time = duration
         # get sys time at start
-        self.start_time = rospy.get_rostime()     
+        self.start_time = rospy.get_rostime()  
     
     def is_time_expired(self):
-        
         returnVal = False
         # check the timer is running
         if self.wait_time is not None:
@@ -629,8 +628,10 @@ class Navigator:
                     # increment count
                     self.backing_cnt += 1
             elif self.mode == Mode.FAT_BOI:
-                if self.is_time_expired:
-                    self.switch_mode(Mode.TRACK)
+                if self.is_time_expired():
+                    rospy.loginfo("Fat time expired")
+                    self.replan()
+                    #self.switch_mode(Mode.TRACK)
                 elif self.near_goal():
                     self.switch_mode(Mode.PARK)    
             

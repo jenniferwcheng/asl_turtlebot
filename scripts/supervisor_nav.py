@@ -76,7 +76,7 @@ class Supervisor:
         self.trans_listener = tf.TransformListener()
         #self.trans_broadcaster = tf.TransformBroadcaster()
         #list of the food and it's location
-        self.food_data = np.zeros((FOOD_ITEMS, 5))
+        self.food_data = np.zeros((FOOD_ITEMS, 6))
         self.food_found = [0, 0, 0, 0, 0]
         self.exploring = True
         
@@ -98,7 +98,7 @@ class Supervisor:
         self.stop_cnfd = None
         self.stop_dist = 100.
         
-        #self.chunky_radius = 0.1 
+        #self.chunky_radius = 0.105
         
         # ------------------------
         #       publishers
@@ -112,6 +112,7 @@ class Supervisor:
         self.cmd_vel_publisher = rospy.Publisher('/cmd_vel', Twist, queue_size=10)
         # state machine interface
         self.sm_interface_publisher = rospy.Publisher('/post/nav_fsm', Bool, queue_size =10)
+        self.squirtler = rospy.Publisher('/post/squirtle_fsm', String, queue_size =10)
         # for publishing foor markers
         self.vis_pub = rospy.Publisher('marker_topic', Marker, queue_size=10)
         
@@ -241,6 +242,11 @@ class Supervisor:
             self.theta_g = euler[2]
         except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
             pass
+        #tell squirtle that we have placed a user waypoint on the map
+        msg = String()
+        msg.data = "way_point"
+        self.squirtler.publish(msg)
+        #change state
         self.mode = Mode.NAV
 
     def nav_pose_callback(self, msg):
@@ -280,7 +286,7 @@ class Supervisor:
             # publish marker on rviz
             self.add_marker(self.stop_x, self.stop_y, STOP_SIGN)
         elif np.abs(th_cam) < np.abs(self.stop_th_cam) and cnfd > self.stop_cnfd:
-            rospy.loginfo("New Theta: %f, Old Theta: %f", th_cam, self.stop_th_cam)
+            #rospy.loginfo("New Theta: %f, Old Theta: %f", th_cam, self.stop_th_cam)
             self.stop_x = x
             self.stop_y = y
             self.stop_th = th
@@ -369,7 +375,7 @@ class Supervisor:
                     dist = (delta_x*np.cos(self.stop_th) + delta_y*np.sin(self.stop_th))/rho
                     dist_ortho = (delta_y*np.cos(self.stop_th) + delta_x*np.sin(self.stop_th))/rho
                     #check to see if the projection distance is within stopping distance
-                    if dist < STOP_MIN_DIST and dist > 0.0 and dist_ortho < 0.0:
+                    if dist < STOP_MIN_DIST/0.75 and dist > 0.0 and dist_ortho < 0.0:
                         returnVal = True
         
         return returnVal
@@ -381,7 +387,7 @@ class Supervisor:
         Returns:False if nothing was added, true if added
         '''
         # get the angle of the frame wrt the world        
-        #theta_food = 0.5*wrapToPi(msg.thetaleft-msg.thetaright) + self.theta
+        theta_food = 0.5*wrapToPi(msg.thetaleft+msg.thetaright)
         
         # find the x, y, of the food using the angle
         x_food = self.x #+(msg.distance - self.chunky_radius)*np.cos(theta_food) 
@@ -391,14 +397,15 @@ class Supervisor:
         if self.exploring and (self.food_found[label] is 0 or msg.distance < self.food_data[label,3]):#np.abs(theta_food) < self.food_data[label,2]:           
             
             # popluate the array at the correct row
-            self.food_data[label] = x_food, y_food, theta_food, msg.distance, msg.confidence
+            self.food_data[label, 0:5] = x_food, y_food, theta_food, msg.distance, msg.confidence
+                        
+            # add marker to location of food
+            #self.broadcast_tf(x_food,y_food,0)
+            #self.add_marker(x_food, y_food, label)
+            self.calc_marker_pos(label, msg)
             
             # indicate that we found the food
             self.food_found[label] = 1
-            
-            # add marker to location of food
-            #self.broadcast_tf(x_food,y_food,0)
-            self.add_marker(x_food, y_food, label)
             
             # return true to indicate successful addition
             return True
@@ -406,6 +413,31 @@ class Supervisor:
         # else return false
         else:
             return False
+    
+    def calc_marker_pos(self, label, msg):
+        # get the angle of the frame wrt the world        
+        theta_label = 0.5*wrapToPi(msg.thetaleft+msg.thetaright)# + self.theta
+        theta_marker = theta_label + self.theta
+        # find the x, y, of the stop sign using the angle
+        x = self.x + msg.distance*np.cos(theta_marker) 
+        y = self.y + msg.distance*np.sin(theta_marker)
+        
+        #cnfd = msg.confidence
+                
+        #if self.stop_th_cam is not None:
+            #rospy.loginfo("New Theta: %f, Old Theta: %f", th_cam, self.stop_th_cam)
+        
+        if self.food_found[label] is 0:
+            #update the angle:
+            self.food_data[label, -1] = theta_label          
+            # publish marker on rviz
+            self.add_marker(x, y, label)
+        elif np.abs(theta_label) < np.abs(self.food_data[label, -1]):# and cnfd > self.stop_cnfd:
+            #update the angle:
+            self.food_data[label, -1] = theta_label          
+            # publish marker on rviz
+            self.add_marker(x, y, label)
+            
             
     def add_marker(self, x, y, label):
         marker = Marker()

@@ -59,6 +59,8 @@ class Squirtle:
         
         # state machine interface
         self.supervisor_fsm_pub = rospy.Publisher('/post/supervisor_fsm', String, queue_size =10)
+        # debugging
+        self.debug_pub = rospy.Publisher('/debug/squirtle_fsm',String,queue_size=10)
         
         # ------------------------
         #       subscribers
@@ -81,16 +83,22 @@ class Squirtle:
         elif msg.data == "done_exploring":
             rospy.loginfo("Handling: done_exploring")
             self.switch_mode(Mode.WAIT_FOR_ORDER)
+        #if user gives squirtle a new waypoint outside of EXPLORE mode
+        elif msg.data == "way_point" and self.mode is not Mode.EXPLORE:
+            #switch state to NAV_2_WAYPT
+            self.switch_mode(Mode.NAV_2_WAYPT)
         elif msg.data == "no_path" and self.mode == Mode.NAV_2_PICKUP:
             rospy.loginfo("Current item not obtainable")
-            self.item_queue = self.item_queue.append(self.current_item)
-            self.pickup_order()
+            self.item_queue.append(self.current_item)
+            self.debug_pub.publish("query_queue") #DEBUGGING QUEUE
+            if self.pickup_order():
+                self.check_item_queue()
             
     def debug_callback(self,msg):
-        if msg.data == 'query_state':
+        if msg.data == "query_state":
             print("[SQUIRTLE DEBUG]: Mode:%s" %str(self.mode))
-        elif msg.data == 'query_queue':
-            print("[SQUIRTLE DEBUG]: Queue: %s" %str(self.order_queue))
+        elif msg.data == "query_queue":
+            print("[SQUIRTLE DEBUG]: Queue: %s" %str(self.item_queue))
         
     def delivery_callback(self,msg):
         # only accept deliveries if we are in WAIT_FOR_ORDER mode
@@ -183,8 +191,10 @@ class Squirtle:
             return False
         #else we have items in the queue we need to plan to
         else:
+            rospy.loginfo("[SQUIRTLE], popping from queue")
             #extract first element in the queue
             self.current_item = self.item_queue.pop(0)
+            self.debug_pub.publish("query_queue") #DEBUGGING QUEUE
             #send item to supervisor for pickup
             self.send_item()
             #set return value to true to indicate we popped something from the queue
@@ -281,6 +291,10 @@ class Squirtle:
                 self.is_at_goal = False
                 # finished with delivery so we can go back to waiting for order
                 self.switch_mode(Mode.WAIT_FOR_ORDER)
+        elif self.mode == Mode.NAV_2_WAYPT:
+            if self.is_at_goal:
+                #resume back to current item for pickup
+                self.send_item()
         else:
             raise Exception('This mode is not supported: %s'
                 % str(self.mode))    

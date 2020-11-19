@@ -23,7 +23,7 @@ from asl_turtlebot.cfg import NavigatorConfig
 # size of buffer
 CMD_HISTORY_SIZE = 25
 
-FAT_TIME = 5
+INFLATE_TIME = 5
 
 # state machine modes, not all implemented
 class Mode(Enum):
@@ -32,8 +32,8 @@ class Mode(Enum):
     TRACK = 2
     PARK = 3
     BACKING_UP = 4
-    FAT_BOI = 5
-    FAT_BOI_ALIGN = 6
+    INFLATE = 5
+    INFLATE_ALIGN = 6
 
 class Navigator:
     """
@@ -63,7 +63,7 @@ class Navigator:
         #laser scans for collision
         self.laser_ranges = []
         self.laser_angle_increment = 0.01 # this gets updated
-        self.chunky_radius = 0.11 #TODO: Tune this!
+        self.chunky_radius = 0.11 #TODO: Tune this! FYI 0.12 sucks so bad -KJ
         
         # goal state
         self.x_g = None
@@ -80,6 +80,7 @@ class Navigator:
         self.map_resolution = 0
         self.map_origin = [0,0]
         self.map_probs = []
+        self.map_probs_inflated = []
         self.occupancy = None
         self.occupancy_updated = False
 
@@ -257,7 +258,7 @@ class Navigator:
           
             if self.x_g is not None:
                 # if we have a goal to plan to, replan
-                if (self.mode is not Mode.BACKING_UP) and (self.mode is not Mode.FAT_BOI) and (self.mode is not Mode.FAT_BOI_ALIGN):
+                if (self.mode is not Mode.BACKING_UP) and (self.mode is not Mode.INFLATE) and (self.mode is not Mode.INFLATE_ALIGN):
                     rospy.loginfo("replanning because of new map")
                     self.replan() # new map, need to replan
 
@@ -365,11 +366,11 @@ class Navigator:
 
         if self.mode == Mode.PARK:
             V, om = self.pose_controller.compute_control(self.x, self.y, self.theta, t)
-        elif self.mode == Mode.TRACK or self.mode == Mode.FAT_BOI:
+        elif self.mode == Mode.TRACK or self.mode == Mode.INFLATE:
             V, om = self.traj_controller.compute_control(self.x, self.y, self.theta, t)
-        elif self.mode == Mode.ALIGN or self.mode == Mode.FAT_BOI_ALIGN:
+        elif self.mode == Mode.ALIGN or self.mode == Mode.INFLATE_ALIGN:
             V, om = self.heading_controller.compute_control(self.x, self.y, self.theta, t)
-        elif self.mode == Mode.BACKING_UP:
+        elif self.mode == Mode.BACKING_UP and self.backing_cnt < (CMD_HISTORY_SIZE-1):
             #extract elements from the queue
             V, om = deQ_buffer()
         else:
@@ -391,15 +392,26 @@ class Navigator:
         return max(0.0, t)  # clip negative time to 0
         
     def inflate_map(self):
-        rospy.loginfo("[NAVIGATOR] Inflating Map")
+        rospy.loginfo("[NAVIGATOR]: Inflating Map")
         
         # convert to matrix
-        map_matrix = np.reshape(self.map_probs, (384,384))
+        map_matrix = np.reshape(self.map_probs, (384,384)) #TODO: Magic numbers
         map_matrix_inflated = morpho.grey_dilation(map_matrix, size=(3,3))
         
         # flatten back to list
-        self.map_probs = map_matrix_inflated.flatten().tolist()
+        self.map_probs_inflated = map_matrix_inflated.flatten().tolist()
         
+        if self.map_width>0 and self.map_height>0 and len(self.map_probs_inflated)>0:
+            self.occupancy = StochOccupancyGrid2D(self.map_resolution,
+                                                  self.map_width,
+                                                  self.map_height,
+                                                  self.map_origin[0],
+                                                  self.map_origin[1],
+                                                  8,
+                                                  self.map_probs_inflated)
+    
+    def deflate_map(self):
+        rospy.loginfo("[NAVIGATOR]: Deflating Map")
         if self.map_width>0 and self.map_height>0 and len(self.map_probs)>0:
             self.occupancy = StochOccupancyGrid2D(self.map_resolution,
                                                   self.map_width,
@@ -408,6 +420,7 @@ class Navigator:
                                                   self.map_origin[1],
                                                   8,
                                                   self.map_probs)
+    
     def replan(self):
         """
         loads goal into pose controller
@@ -440,8 +453,13 @@ class Navigator:
             rospy.loginfo("Planning failed")
             #tell squirtle we could not find a path
             msg = String()
-            msg.data = 'no_path'
+            msg.data = "no_path"
             self.publish_squirtle.publish(msg)
+            #TODO: THIS WAS COMMENTED OUT BEFORE, BUT WAS HERE IN RECENT COMMIT
+            #ATTEMPTING TO UNCOMMENT AGAIN AND TEST!
+            if self.mode == Mode.BACKING_UP:
+                self.deflate_map()
+                self.switch_mode(Mode.IDLE)
             return
         rospy.loginfo("Planning Succeeded")
 
@@ -450,6 +468,10 @@ class Navigator:
         # Check whether path is too short
         if self.at_goal():
             rospy.loginfo("Path already at goal pose")
+            #tell squirtle we are at the goal
+            msg = String()
+            msg.data = "at_goal"
+            self.publish_squirtle.publish(msg)
             self.switch_mode(Mode.IDLE)
             return
         elif len(planned_path) < 4:
@@ -491,14 +513,14 @@ class Navigator:
         if not self.aligned():
             rospy.loginfo("Not aligned with start direction")
             if self.mode == Mode.BACKING_UP:
-                self.switch_mode(Mode.FAT_BOI_ALIGN)
+                self.switch_mode(Mode.INFLATE_ALIGN)
             else:
                 self.switch_mode(Mode.ALIGN)
             return
             
-        if self.mode == Mode.BACKING_UP:
-            self.start_timer(FAT_TIME)
-            self.switch_mode(Mode.FAT_BOI)
+        if self.mode == Mode.BACKING_UP: #what happens if we want to nav to new goal here...?
+            self.start_timer(INFLATE_TIME)
+            self.switch_mode(Mode.INFLATE)
         else:
             rospy.loginfo("Ready to track")
             self.switch_mode(Mode.TRACK)
@@ -555,8 +577,8 @@ class Navigator:
             def if_about_to_hit_wall(laserRanges):
                 #initialize return value to false
                 returnFlag = False
-                #remove the zeros
-                validRanges = np.trim_zeros(laserRanges)
+                ##remove the zeros
+                #validRanges = np.trim_zeros(laserRanges)
                 #validRanges = [i for i, dist in enumerate(laserRanges) if dist != 0]
                 #check the minimum scan distance
                 #rospy.loginfo(laserRanges)
@@ -569,6 +591,13 @@ class Navigator:
                     returnFlag = True 
                 #return the flag                 
                 return returnFlag
+            
+            def purge_control_queue():
+                # NUKE EVERYTHING!!!!!!!!!
+                self.history_cnt = 0
+                self.V_history =  np.zeros(CMD_HISTORY_SIZE)
+                self.om_history = np.zeros(CMD_HISTORY_SIZE)
+                self.backing_cnt = 0
 
             # STATE MACHINE LOGIC
             # some transitions handled by callbacks
@@ -578,14 +607,17 @@ class Navigator:
                 if self.aligned():
                     self.current_plan_start_time = rospy.get_rostime()
                     self.switch_mode(Mode.TRACK)
-            elif self.mode == Mode.FAT_BOI_ALIGN:
+                    
+            elif self.mode == Mode.INFLATE_ALIGN:
                 if self.aligned():
                     self.current_plan_start_time = rospy.get_rostime()
-                    self.start_timer(FAT_TIME)
-                    self.switch_mode(Mode.FAT_BOI)
+                    self.start_timer(INFLATE_TIME)
+                    self.switch_mode(Mode.INFLATE)
+                    
             elif self.mode == Mode.TRACK:
                 if if_about_to_hit_wall(self.laser_ranges):
                     rospy.loginfo("About to hit a wall")
+                    self.start_timer(10)
                     self.switch_mode(Mode.BACKING_UP)
                 elif self.near_goal():
                     self.switch_mode(Mode.PARK)
@@ -595,6 +627,7 @@ class Navigator:
                 elif (rospy.get_rostime() - self.current_plan_start_time).to_sec() > self.current_plan_duration:
                     rospy.loginfo("replanning because out of time")
                     self.replan() # we aren't near the goal but we thought we should have been, so replan
+                    
             elif self.mode == Mode.PARK:
                 #if if_about_to_hit_wall():
                  #   self.switch_mode(Mode.BACKING_UP)
@@ -605,6 +638,8 @@ class Navigator:
                     self.theta_g = None
                     self.switch_mode(Mode.IDLE)
                     
+                    purge_control_queue()
+                    
                     #tell squirtle we are at the goal
                     msg = String()
                     msg.data = "at_goal"
@@ -612,27 +647,40 @@ class Navigator:
             
             elif self.mode == Mode.BACKING_UP:
                 # see if we have backed enough counts
-                if (self.backing_cnt > CMD_HISTORY_SIZE):# or if_about_to_hit_wall(self.laser_ranges):
-                    # NUKE EVERYTHING!!!!!!!!!
-                    self.history_cnt = 0
-                    self.V_history =  np.zeros(CMD_HISTORY_SIZE)
-                    self.om_history = np.zeros(CMD_HISTORY_SIZE)
-                    self.backing_cnt = 0
+                if (self.backing_cnt >= CMD_HISTORY_SIZE):# or if_about_to_hit_wall(self.laser_ranges):
+                    self.backing_cnt = CMD_HISTORY_SIZE #just for good measure
+                    #stop the robot
+                    self.publish_control()
+                    #purge the control since backup is done 
+                    purge_control_queue()
                     
                     #make walls chunkier
                     self.inflate_map()
                     
                     self.replan() #switches mode internally
                     #self.switch_mode(Mode.TRACK)
+                    
+                elif self.is_time_expired():
+                    purge_control_queue()
+
+                    
+                    #we must have gotten stuck or something
+                    #we need to run replan again 
+                    self.deflate_map()
+                    self.switch_mode(Mode.TRACK)
+                    self.replan()
+                    
+                    
                 else:
                     # increment count
                     self.backing_cnt += 1
-            elif self.mode == Mode.FAT_BOI:
+            elif self.mode == Mode.INFLATE:
                 if self.is_time_expired():
-                    rospy.loginfo("Fat time expired")
+                    rospy.loginfo("Inflate time expired")
+                    self.deflate_map()
                     self.replan()
-                    #self.switch_mode(Mode.TRACK)
                 elif self.near_goal():
+                    self.deflate_map()
                     self.switch_mode(Mode.PARK)    
             
             self.publish_control()

@@ -2,7 +2,7 @@
   
   <class name="SquirtleBotCommander" type="SquirtleBotCommander" base_class_type="rqt_gui_cpp::Plugin">
     <description>
-      Delete this later
+      SquirtleBot Command Center
     </description>
     <qtgui>
       <group>
@@ -10,9 +10,9 @@
         <icon type="theme">folder</icon>
         <statustip>Plugins related to robot tools</statustip>
       </group>
-      <label>[irg] SquirtleBotCommander</label>
-      <icon type="theme">camera-photo</icon>
-      <statustip>Delete this</statustip>
+      <label>SquirtleBotCommander</label>
+      <icon type="theme">input-gaming</icon>
+      <statustip>SquirtleBot Command Center</statustip>
     </qtgui>
   </class>
   

@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+
 import rospy
 import os
 # watch out on the order for the next two imports lol
@@ -11,6 +12,8 @@ from asl_turtlebot.msg import DetectedObject, DetectedObjectList
 from cv_bridge import CvBridge, CvBridgeError
 import cv2
 import math
+
+os.environ["CUDA_VISIBLE_DEVICES"] = "5"
 
 # path to the trained conv net
 #PATH_TO_MODEL = os.path.join(os.path.dirname(os.path.realpath(__file__)), '../tfmodels/ssd_mobilenet_v1_coco.pb')

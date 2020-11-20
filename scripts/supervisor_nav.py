@@ -72,6 +72,7 @@ class Supervisor:
         self.goal_update = False
         
         self.mode = Mode.IDLE
+        self.nav_idle_park = False
         self.last_mode_printed = None
         self.trans_listener = tf.TransformListener()
         #self.trans_broadcaster = tf.TransformBroadcaster()
@@ -123,6 +124,8 @@ class Supervisor:
         rospy.Subscriber('/post/supervisor_fsm', String, self.post_callback)
         # service debug topic
         rospy.Subscriber('/debug/supervisor_fsm', String, self.debug_callback)
+        #for listening to state of navigator
+        rospy.Subscriber('/state_bd/nav_fsm', String, self.nav_state_callback)
         
         # stop sign detector
         rospy.Subscriber('/detector/stop_sign', DetectedObject, self.stop_sign_detected_callback)
@@ -175,7 +178,7 @@ class Supervisor:
                 % msg.data)
         rospy.loginfo("The index is: %d", idx)
         self.goal_update = True 
-        #if the label was squirlte, we need to deliver
+        #if the label was squirtle, we need to deliver
         if msg.data == "squirtle":
             rospy.loginfo("Setting goal to delivery")
             self.x_g = self.squirtle_x 
@@ -201,6 +204,11 @@ class Supervisor:
         else:
             print("[SUPERVISOR DEBUG]: Invalid request")
             
+    def nav_state_callback(self, msg):
+        if msg.data == "Mode.IDLE" or msg.data == "Mode.PARK":
+            self.nav_idle_park = True
+        else:
+            self.nav_idle_park = False        
                
     def post_explore_callback(self,msg): 
         rospy.loginfo("[SUPERVISOR]: Received msg: %s", msg.data)
@@ -263,41 +271,61 @@ class Supervisor:
     def stop_sign_detected_callback(self, msg):
         """ callback for when the detector has found a stop sign. Note that
         a distance of 0 can mean that the lidar did not pickup the stop sign at all """
-        
-        # distance of the stop sign
-        dist = msg.distance 
-        #rospy.loginfo("Stop Sign found at %f distance", dist)
-        
-        # get stop sign location
-        x, y, th, th_cam = self.get_stop_sign_location(msg)
-        cnfd = msg.confidence
-        
-        
-        #if self.stop_th_cam is not None:
-            #rospy.loginfo("New Theta: %f, Old Theta: %f", th_cam, self.stop_th_cam)
-        
-        if self.stop_th_cam is None:
-            self.stop_x = x
-            self.stop_y = y
-            self.stop_th = th
-            self.stop_th_cam = th_cam
-            self.stop_cnfd = cnfd
+        if self.exploring:
+            # distance of the stop sign
+            dist = msg.distance 
+            #rospy.loginfo("Stop Sign found at %f distance", dist)
             
-            # publish marker on rviz
-            self.add_marker(self.stop_x, self.stop_y, STOP_SIGN)
-        elif np.abs(th_cam) < np.abs(self.stop_th_cam) and cnfd > self.stop_cnfd:
-            #rospy.loginfo("New Theta: %f, Old Theta: %f", th_cam, self.stop_th_cam)
-            self.stop_x = x
-            self.stop_y = y
-            self.stop_th = th
-            self.stop_th_cam = th_cam
-            self.stop_cnfd = cnfd
-            # publish marker on rviz
-            self.add_marker(self.stop_x, self.stop_y, STOP_SIGN)
+            # get stop sign location
+            x, y, th, th_cam = self.get_stop_sign_location(msg)
+            cnfd = msg.confidence
             
-        # if close enough and in nav mode, stop
-        #if dist > 0 and dist < STOP_MIN_DIST and self.mode == Mode.NAV:
-            #self.init_stop_sign()
+        
+            #if self.stop_th_cam is not None:
+            #    rospy.loginfo("[STOP_SIGN] New Theta: %f, Old Theta: %f", th_cam, self.stop_th_cam)
+            
+            if self.stop_th_cam is None:
+                self.stop_x = x
+                self.stop_y = y
+                self.stop_th = th
+                self.stop_th_cam = th_cam
+                self.stop_cnfd = cnfd
+                rospy.loginfo("[STOP_SIGN] First Theta: %f", self.stop_th_cam)
+                rospy.loginfo("[STOP_SIGN] First Confidence: %f", self.stop_cnfd)
+                
+                # publish marker on rviz
+                self.add_marker(self.stop_x, self.stop_y, STOP_SIGN)
+                
+            elif (msg.distance < 0.5):#and not self.nav_align:#TODO: Magic number
+                if not self.nav_idle_park:
+                    rospy.loginfo("[STOP_SIGN]: I'm turning so no marker for you")
+                else:
+                    # publish marker on rviz
+                    self.stop_x = x
+                    self.stop_y = y
+                    self.stop_th = th
+                    rospy.loginfo("[STOP_SIGN] CLOSE confidence: %f, CLOSE theta_label: %f",msg.confidence,th_cam)
+                    self.add_marker(self.stop_x, self.stop_y, STOP_SIGN)
+                    # Now that we have gotten close enough, we set our confidence to 1.0 such that we never
+                    # update this marker ever again unless we come close to it again (while in Explore mode of course)
+                    # Also update our theta similarly
+                    self.stop_cnfd = 1.0 # High confidence
+                    self.stop_th_cam = 0.0 # Low theta_label (similar to head-on)
+                
+            elif np.abs(th_cam) < np.abs(self.stop_th_cam) and cnfd > self.stop_cnfd:
+                rospy.loginfo("[STOP_SIGN] New Theta: %f, Old Theta: %f", th_cam, self.stop_th_cam)
+                rospy.loginfo("[STOP_SIGN] Confidence: %f, Old confidence: %f", cnfd, self.stop_cnfd)
+                self.stop_x = x
+                self.stop_y = y
+                self.stop_th = th
+                self.stop_th_cam = th_cam
+                self.stop_cnfd = cnfd
+                # publish marker on rviz
+                self.add_marker(self.stop_x, self.stop_y, STOP_SIGN)
+                
+            # if close enough and in nav mode, stop
+            #if dist > 0 and dist < STOP_MIN_DIST and self.mode == Mode.NAV:
+                #self.init_stop_sign()
             
     def hot_dog_detected_callback(self, msg):
     
@@ -348,6 +376,7 @@ class Supervisor:
     # ---------------------------------------------
     
     def get_stop_sign_location(self,msg):
+        
         # get the angle of the frame wrt the world        
         theta_cam = 0.5*wrapToPi(msg.thetaleft+msg.thetaright)# + self.theta
         theta_stop = self.theta + theta_cam
@@ -393,20 +422,16 @@ class Supervisor:
         x_food = self.x #+(msg.distance - self.chunky_radius)*np.cos(theta_food) 
         y_food = self.y #+(msg.distance - self.chunky_radius)*np.sin(theta_food) 
         theta_food = self.theta
+        
         # check to see if the food was added or we have a better distance, but only when we are exploring
         if self.exploring and (self.food_found[label] is 0 or msg.distance < self.food_data[label,3]):#np.abs(theta_food) < self.food_data[label,2]:           
             
             # popluate the array at the correct row
-            self.food_data[label, 0:5] = x_food, y_food, theta_food, msg.distance, msg.confidence
-                        
+            self.food_data[label, 0:4] = x_food, y_food, theta_food, msg.distance
             # add marker to location of food
-            #self.broadcast_tf(x_food,y_food,0)
-            #self.add_marker(x_food, y_food, label)
-            self.calc_marker_pos(label, msg)
-            
+            self.calc_marker_pos(label, msg)                     
             # indicate that we found the food
             self.food_found[label] = 1
-            
             # return true to indicate successful addition
             return True
             
@@ -429,14 +454,35 @@ class Supervisor:
         
         if self.food_found[label] is 0:
             #update the angle:
-            self.food_data[label, -1] = theta_label          
+            self.food_data[label, -1] = theta_label
+            #update confidence:
+            self.food_data[label, -2] = msg.confidence
+            rospy.loginfo("[FOOD %d] First confidence: %f, First theta_label: %f", label, self.food_data[label,-2],self.food_data[label,-1])            
             # publish marker on rviz
             self.add_marker(x, y, label)
-        elif np.abs(theta_label) < np.abs(self.food_data[label, -1]):# and cnfd > self.stop_cnfd:
+        elif (msg.distance < 0.5):#and not self.nav_align:#TODO: Magic number
+            if not self.nav_idle_park:
+                rospy.loginfo("[FOOD %d]: I'm turning so no marker for you", label)
+            else:
+                rospy.loginfo("[FOOD %d] CLOSE confidence: %f, CLOSE theta_label: %f", label, msg.confidence, theta_label)
+                # publish marker on rviz
+                self.add_marker(x, y, label)
+                # Now that we have gotten close enough, we set our confidence to 1.0 such that we never
+                # update this marker ever again unless we come close to it again (while in Explore mode of course)
+                # Also update our theta similarly
+                self.food_data[label, -2] = 1.0 # High confidence
+                self.food_data[label, -1] = 0.0 # Low theta_label (similar to head-on)
+        elif np.abs(theta_label) < np.abs(self.food_data[label, -1]) or (msg.confidence > self.food_data[label, -2]) :# and cnfd > self.stop_cnfd:
+            rospy.loginfo("[FOOD %d] Old confidence: %f, old theta_label: %f", label, self.food_data[label,-2],self.food_data[label,-1])
             #update the angle:
-            self.food_data[label, -1] = theta_label          
+            self.food_data[label, -1] = theta_label 
+            #update confidence:
+            self.food_data[label, -2] = msg.confidence        
             # publish marker on rviz
             self.add_marker(x, y, label)
+            
+            #TODO: DELETE! JUST FOR DEBUGGING
+            rospy.loginfo("[FOOD %d] New confidence: %f, new theta_label: %f", label, self.food_data[label,-2],self.food_data[label,-1])
             
             
     def add_marker(self, x, y, label):
@@ -645,6 +691,7 @@ class Supervisor:
             rate.sleep()
 
 if __name__ == '__main__':
+
     sup = Supervisor()
     sup.run()
     

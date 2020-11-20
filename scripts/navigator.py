@@ -25,6 +25,7 @@ CMD_HISTORY_SIZE = 25
 
 INFLATE_TIME = 5
 
+    
 # state machine modes, not all implemented
 class Mode(Enum):
     IDLE = 0
@@ -35,6 +36,7 @@ class Mode(Enum):
     INFLATE = 5
     INFLATE_ALIGN = 6
 
+    
 class Navigator:
     """
     This node handles point to point turtlebot motion, avoiding obstacles.
@@ -63,12 +65,13 @@ class Navigator:
         #laser scans for collision
         self.laser_ranges = []
         self.laser_angle_increment = 0.01 # this gets updated
-        self.chunky_radius = 0.11 #TODO: Tune this! FYI 0.12 sucks so bad -KJ
+        self.chunky_radius = 0.11
         
         # goal state
         self.x_g = None
         self.y_g = None
         self.theta_g = None
+        self.stop_flag = False
 
         self.th_init = 0.0
         
@@ -138,6 +141,8 @@ class Navigator:
         self.cfg_srv = Server(NavigatorConfig, self.dyn_cfg_callback)
         #communication with squirtle_fsm to inform goal status
         self.publish_squirtle = rospy.Publisher('/post/squirtle_fsm', String, queue_size = 10)
+        #Publisher for our state
+        self.nav_mode_publisher = rospy.Publisher('/state_bd/nav_fsm', String, queue_size = 5)
          
         # Subscriber Constructors
         rospy.Subscriber('/post/nav_fsm', Bool, self.post_callback) #service queue
@@ -148,7 +153,8 @@ class Navigator:
         rospy.Subscriber('debug/nav_fsm', String, self.debug_callback)
 
         print "finished init"
-     
+        
+
     #------------------------------------------------------------------
     # Subscriber Callbacks
     #------------------------------------------------------------------
@@ -166,7 +172,7 @@ class Navigator:
     #for the interface topic between nav and supervisor 
     def post_callback(self,data):
         rospy.loginfo("Received from interface topic")
-        
+        self.stop_flag = data.data
         # received true = stop
         if data.data is True:   
                         
@@ -304,6 +310,12 @@ class Navigator:
     def switch_mode(self, new_mode):
         rospy.loginfo("Switching from %s -> %s", self.mode, new_mode)
         self.mode = new_mode
+        #Publish new mode
+        state_msg = String()
+        state_msg.data = str(self.mode)
+        print(str(self.mode))
+        self.nav_mode_publisher.publish(state_msg)
+        
     #------------------------------------------------------------------
     # Publishers
     #------------------------------------------------------------------
@@ -451,12 +463,12 @@ class Navigator:
         success =  problem.solve()
         if not success:
             rospy.loginfo("Planning failed")
+            
             #tell squirtle we could not find a path
             msg = String()
             msg.data = "no_path"
             self.publish_squirtle.publish(msg)
-            #TODO: THIS WAS COMMENTED OUT BEFORE, BUT WAS HERE IN RECENT COMMIT
-            #ATTEMPTING TO UNCOMMENT AGAIN AND TEST!
+
             if self.mode == Mode.BACKING_UP:
                 self.deflate_map()
                 self.switch_mode(Mode.IDLE)
@@ -467,11 +479,13 @@ class Navigator:
 
         # Check whether path is too short
         if self.at_goal():
-            rospy.loginfo("Path already at goal pose")
-            #tell squirtle we are at the goal
-            msg = String()
-            msg.data = "at_goal"
-            self.publish_squirtle.publish(msg)
+            #check the stop flag and don't post 'at_goal' if set (or else Squirtle will get confused at stop signs)
+            if not self.stop_flag:
+                rospy.loginfo("Path already at goal pose")
+                #tell squirtle we are at the goal
+                msg = String()
+                msg.data = "at_goal"
+                self.publish_squirtle.publish(msg)
             self.switch_mode(Mode.IDLE)
             return
         elif len(planned_path) < 4:
@@ -559,21 +573,7 @@ class Navigator:
                 self.switch_mode(Mode.IDLE)
                 print e
                 pass
-            
-            """  
-            def if_about_to_hit_wall():
-                
-                # check if inflated turtlebot circumference will hit the wall
-                #th_offset = np.pi/8.0
-                #arr = np.arange(wrapToPi(self.theta-th_offset), wrapToPi(self.theta+th_offset), 0.02)
-                arr = np.arange(0, 2*np.pi, 0.02)
-                for i in range(len(arr)):
-                    if not self.occupancy.is_free(np.array([self.x + np.cos(arr[i])*self.chunky_radius,self.y+np.sin(arr[i])*self.chunky_radius])):
-                        return True
-                return False  
-                
-                #return not self.occupancy.is_free(np.array([self.x ,self.y]))
-            """ 
+   
             def if_about_to_hit_wall(laserRanges):
                 #initialize return value to false
                 returnFlag = False
